@@ -1,0 +1,104 @@
+{% extends 'price_list_app/base.html' %}
+{% load custom_filters %}
+
+{% block title %}Input Coefficients{% endblock %}
+
+{% block content %}
+<div class="container-fluid full-width-container">
+    <h2 class="my-4">Input Coefficients and Custom Headers</h2>
+    <form method="post" id="coefficientsForm">
+        {% csrf_token %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Group</th>
+                        {% for i in num_prices_range %}
+                            <th colspan="3" class="group-header text-center">Price Set {{ i }}</th>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        <th></th>
+                        {% for i in num_prices_range %}
+                            <th>Operation</th>
+                            <th>Coefficient</th>
+                            <th>Header</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in dynamic_fields %}
+                    <tr>
+                        <td>{{ group.group }}</td>
+                        {% for field in group.fields %}
+                            <td>{{ form|get_item:field.operation }}</td>
+                            <td>{{ form|get_item:field.coefficient }}</td>
+                            <td>{{ form|get_item:field.header }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="form-group row mt-3">
+            <div class="col-sm-10 offset-sm-2">
+                <button type="submit" class="btn btn-primary">Generate Files</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- input_coefficients.html -->
+<script>
+function setCookie(name, value, days) {
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "") + expires + "; path=/";
+}
+
+function getCookie(name) {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for(let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+}
+
+document.getElementById('coefficientsForm').addEventListener('submit', function() {
+    const form = this;
+    const coefficients = {};
+    {% for group in dynamic_fields %}
+        coefficients["{{ group.group }}"] = [];
+        {% for field in group.fields %}
+            const operation = form.elements["{{ field.operation }}"].value;
+            const coefficient = form.elements["{{ field.coefficient }}"].value;
+            const header = form.elements["{{ field.header }}"].value;
+            coefficients["{{ group.group }}"].push({ operation, coefficient, header });
+        {% endfor %}
+    {% endfor %}
+    setCookie('coefficients', JSON.stringify(coefficients), 30);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const coefficients = JSON.parse(getCookie('coefficients') || '{}');
+    const form = document.getElementById('coefficientsForm');
+    for (const [group, fields] of Object.entries(coefficients)) {
+        fields.forEach((field, index) => {
+            form.elements[`${group}_operation_${index + 1}`].value = field.operation;
+            form.elements[`${group}_coefficient_${index + 1}`].value = field.coefficient;
+            form.elements[`${group}_header_${index + 1}`].value = field.header;
+        });
+    }
+});
+</script>
+
+
+{% endblock %}
+

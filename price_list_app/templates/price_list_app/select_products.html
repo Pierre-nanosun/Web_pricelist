@@ -1,0 +1,73 @@
+{% extends 'price_list_app/base.html' %}
+
+{% block title %}Select Products{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">Select Product Types and Warehouse</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label for="id_groups">Product Types:</label>
+                            <div>
+                                <button type="button" class="btn btn-primary1" id="select-all">Select All</button>
+                                <button type="button" class="btn btn-primary2" id="unselect-all">Unselect All</button>
+                            </div>
+                            <div class="form-check mt-3">
+                                {% for checkbox in form.groups %}
+                                <div class="form-check large-checkbox">
+                                    <label class="form-check-label large-checkbox-label">
+                                        {{ checkbox.tag }} {{ checkbox.choice_label }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label for="id_warehouse" class="col-sm-3 col-form-label">Warehouse:</label>
+                            <div class="col-sm-9">
+                                {{ form.warehouse }}
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label for="id_num_prices" class="col-sm-3 col-form-label">Number of Prices:</label>
+                            <div class="col-sm-9">
+                                {{ form.num_prices }}
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div class="col-sm-9 offset-sm-3">
+                                <button type="submit" class="btn btn-primary1">Next</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectAllButton = document.getElementById('select-all');
+        const unselectAllButton = document.getElementById('unselect-all');
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+
+        selectAllButton.addEventListener('click', function() {
+            checkboxes.forEach(function(checkbox) {
+                checkbox.checked = true;
+            });
+        });
+
+        unselectAllButton.addEventListener('click', function() {
+            checkboxes.forEach(function(checkbox) {
+                checkbox.checked = false;
+            });
+        });
+    });
+</script>
+{% endblock %}
