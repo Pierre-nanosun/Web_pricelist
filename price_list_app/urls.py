@@ -15,7 +15,7 @@ urlpatterns = [
     path('download_pdf/', views.download_pdf, name='download_pdf'),
     path('download_excel/', views.download_excel, name='download_excel'),
     path('view_pdf/', views.view_pdf, name='view_pdf'),
-    path('oauth/', include('social_django.urls', namespace='social')),  # Add this line
+    path('oauth/', include('social_django.urls', namespace='social')),
 ]
 
 if settings.DEBUG:

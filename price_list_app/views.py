@@ -7,11 +7,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout, login
 from django.contrib.auth.forms import AuthenticationForm
 from django.conf import settings
-from django.http import FileResponse
 from .forms import SelectionForm, CoefficientForm
 from .models import Configuration
 from fpdf import FPDF
 from PyPDF2 import PdfReader, PdfWriter
+from django.http import FileResponse, HttpResponse
 
 # Constants
 BASE_DIR = settings.BASE_DIR
@@ -513,9 +513,12 @@ def download_excel(request):
         return FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, filename='price_list_with_selling_prices.xlsx')
     return redirect('results')
 
+
 @login_required
 def view_pdf(request):
-    file_path = os.path.join(output_dir, 'price_list_with_selling_prices.pdf')
+    file_path = '/home/PierreLecorre/Web_pricelist/static/generated_files/price_list_with_selling_prices.pdf'
+
     if os.path.exists(file_path):
         return FileResponse(open(file_path, 'rb'), content_type='application/pdf')
-    return redirect('results')
+    else:
+        return HttpResponse("File not found", status=404)

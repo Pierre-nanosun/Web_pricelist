@@ -11,9 +11,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-y1d%8ppzk-70mbqvhnyfq!@q)ko&zus2j!k-ck4evfkekh-mex')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['PierreLecorre.pythonanywhere.com']
 
 # Application definition
 
@@ -120,7 +120,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
+    os.path.join(BASE_DIR, "static"),
 ]
 
 # Directory where the font files are stored
@@ -137,3 +137,6 @@ CSRF_COOKIE_SECURE = False
 
 # Add URL for Google OAuth 2.0
 SOCIAL_AUTH_URL_NAMESPACE = 'social'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
