@@ -1,4 +1,3 @@
-# price_list_app/management/commands/populate_mappings.py
 import os
 import django
 import pandas as pd

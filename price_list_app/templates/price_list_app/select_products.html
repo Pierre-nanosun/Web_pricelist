@@ -111,6 +111,11 @@
                 checkbox.checked = false;
             });
         });
+
+        // Preselect all brand checkboxes when the page loads
+        brandCheckboxes.forEach(function(checkbox) {
+            checkbox.checked = true;
+        });
     });
 </script>
 {% endblock %}
