@@ -1,11 +1,20 @@
 # price_list_app/management/commands/populate_mappings.py
+import os
+import django
+import pandas as pd
 from django.core.management.base import BaseCommand
-from price_list_app.models import NomenclatureMapping, PanelMapping
+from price_list_app.models import NomenclatureMapping, PanelMapping, Brand
+from django.conf import settings
+
+# Ensure the settings module is set
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'price_list_project.settings')
+django.setup()
 
 class Command(BaseCommand):
-    help = 'Populates the database with initial nomenclature and panel mappings'
+    help = 'Populates the database with initial nomenclature, panel mappings, and brands from data.csv'
 
     def handle(self, *args, **kwargs):
+        # Populating NomenclatureMapping
         nomenclature_data = [
             ('PAN', 'Panels'),
             ('INV', 'Inverters'),
@@ -20,6 +29,10 @@ class Command(BaseCommand):
             ('CAB', 'Cables')
         ]
 
+        for key, value in nomenclature_data:
+            NomenclatureMapping.objects.get_or_create(key=key, value=value)
+
+        # Populating PanelMapping
         panel_data = [
             ('GLASS', 'Glass foil'),
             ('2GLASS', 'Double glass'),
@@ -45,12 +58,15 @@ class Command(BaseCommand):
             ('SF', 'Silver Frame')
         ]
 
-        # Populate NomenclatureMapping
-        for key, value in nomenclature_data:
-            NomenclatureMapping.objects.get_or_create(key=key, value=value)
-
-        # Populate PanelMapping
         for key, value in panel_data:
             PanelMapping.objects.get_or_create(key=key, value=value)
 
-        self.stdout.write(self.style.SUCCESS('Successfully populated mappings'))
+        # Populating Brand table from data.csv
+        csv_file_path = os.path.join(settings.BASE_DIR, 'data', 'data.csv')
+        df = pd.read_csv(csv_file_path)
+        distinct_brands = df['brand'].dropna().unique()
+
+        for brand in distinct_brands:
+            Brand.objects.get_or_create(name=brand)
+
+        self.stdout.write(self.style.SUCCESS('Successfully populated mappings and brands'))

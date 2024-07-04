@@ -16,7 +16,8 @@ urlpatterns = [
     path('download_excel/', views.download_excel, name='download_excel'),
     path('view_pdf/', views.view_pdf, name='view_pdf'),
     path('oauth/', include('social_django.urls', namespace='social')),
-]
+    path('update-csv/', views.update_csv_view, name='update_csv'),
+    ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

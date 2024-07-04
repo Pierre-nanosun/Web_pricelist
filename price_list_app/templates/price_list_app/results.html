@@ -9,8 +9,4 @@
     <a class="btn btn-primary btn-lg" href="{% url 'download_pdf' %}" role="button">Download PDF</a>
     <a class="btn btn-success btn-lg" href="{% url 'download_excel' %}" role="button">Download Excel</a>
 </div>
-<div class="my-4">
-    <h3>PDF Preview:</h3>
-    <embed src="{% url 'view_pdf' %}" width="100%" height="600px" type="application/pdf">
-</div>
 {% endblock %}

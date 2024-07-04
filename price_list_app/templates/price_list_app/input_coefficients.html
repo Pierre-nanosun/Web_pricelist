@@ -33,7 +33,9 @@
                         {% for field in group.fields %}
                             <td>{{ form|get_item:field.operation }}</td>
                             <td>{{ form|get_item:field.coefficient }}</td>
-                            <td>{{ form|get_item:field.header }}</td>
+                            <td>
+                                <input type="text" name="{{ field.header }}" value="{{ field.default_header }}" class="form-control">
+                            </td>
                         {% endfor %}
                     </tr>
                     {% endfor %}
@@ -48,39 +50,19 @@
     </form>
 </div>
 
-<!-- input_coefficients.html -->
 <script>
-function setCookie(name, value, days) {
-    let expires = "";
-    if (days) {
-        const date = new Date();
-        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-        expires = "; expires=" + date.toUTCString();
-    }
-    document.cookie = name + "=" + (value || "") + expires + "; path=/";
-}
-
-function getCookie(name) {
-    const nameEQ = name + "=";
-    const ca = document.cookie.split(';');
-    for(let i = 0; i < ca.length; i++) {
-        let c = ca[i];
-        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
-    }
-    return null;
-}
-
 document.getElementById('coefficientsForm').addEventListener('submit', function() {
     const form = this;
     const coefficients = {};
     {% for group in dynamic_fields %}
-        coefficients["{{ group.group }}"] = [];
+        coefficients["{{ group.group }}"] = {};
         {% for field in group.fields %}
             const operation = form.elements["{{ field.operation }}"].value;
             const coefficient = form.elements["{{ field.coefficient }}"].value;
             const header = form.elements["{{ field.header }}"].value;
-            coefficients["{{ group.group }}"].push({ operation, coefficient, header });
+            coefficients["{{ group.group }}"][`operation_${field.index}`] = operation;
+            coefficients["{{ group.group }}"][`coefficient_${field.index}`] = coefficient;
+            coefficients["{{ group.group }}"][`header_${field.index}`] = header;
         {% endfor %}
     {% endfor %}
     setCookie('coefficients', JSON.stringify(coefficients), 30);
@@ -90,15 +72,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const coefficients = JSON.parse(getCookie('coefficients') || '{}');
     const form = document.getElementById('coefficientsForm');
     for (const [group, fields] of Object.entries(coefficients)) {
-        fields.forEach((field, index) => {
-            form.elements[`${group}_operation_${index + 1}`].value = field.operation;
-            form.elements[`${group}_coefficient_${index + 1}`].value = field.coefficient;
-            form.elements[`${group}_header_${index + 1}`].value = field.header;
-        });
+        for (const [index, field] of Object.entries(fields)) {
+            form.elements[`${group}_operation_${index}`].value = field.operation;
+            form.elements[`${group}_coefficient_${index}`].value = field.coefficient;
+            form.elements[`${group}_header_${index}`].value = field.header;
+        }
     }
 });
 </script>
 
-
 {% endblock %}
-

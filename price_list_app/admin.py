@@ -1,10 +1,12 @@
 from django.contrib import admin
-from .models import NomenclatureMapping, PanelMapping, Configuration
+from .models import NomenclatureMapping, PanelMapping, Configuration, Brand, Logo, PriceLabel
 from django import forms
 from jsoneditor.forms import JSONEditor
 
+
 admin.site.register(NomenclatureMapping)
 admin.site.register(PanelMapping)
+admin.site.register(Brand)
 
 class ConfigurationAdminForm(forms.ModelForm):
     class Meta:
@@ -33,3 +35,15 @@ class ConfigurationAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user')
+
+
+
+@admin.register(Logo)
+class LogoAdmin(admin.ModelAdmin):
+    list_display = ('name', 'file')
+
+
+@admin.register(PriceLabel)
+class PriceLabelAdmin(admin.ModelAdmin):
+    list_display = ('product_group', 'price_label_1', 'price_label_2', 'price_label_3', 'price_label_4')
+    search_fields = ('product_group',)

@@ -7,39 +7,66 @@
     <div class="row justify-content-center">
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header bg-primary text-white">Select Product Types and Warehouse</div>
+                <div class="card-header bg-primary text-white">Select Product Types, Warehouse, and Brands</div>
                 <div class="card-body">
                     <form method="post">
                         {% csrf_token %}
-                        <div class="form-group">
-                            <label for="id_groups">Product Types:</label>
-                            <div>
-                                <button type="button" class="btn btn-primary1" id="select-all">Select All</button>
-                                <button type="button" class="btn btn-primary2" id="unselect-all">Unselect All</button>
-                            </div>
-                            <div class="form-check mt-3">
-                                {% for checkbox in form.groups %}
-                                <div class="form-check large-checkbox">
-                                    <label class="form-check-label large-checkbox-label">
-                                        {{ checkbox.tag }} {{ checkbox.choice_label }}
-                                    </label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="id_groups">Product Types:</label>
+                                    <div>
+                                        <button type="button" class="btn btn-primary1" id="select-all-groups">Select All</button>
+                                        <button type="button" class="btn btn-primary2" id="unselect-all-groups">Unselect All</button>
+                                    </div>
+                                    <div class="form-check mt-3">
+                                        {% for checkbox in form.groups %}
+                                        <div class="form-check large-checkbox">
+                                            <label class="form-check-label large-checkbox-label">
+                                                {{ checkbox.tag }} {{ checkbox.choice_label }}
+                                            </label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
                                 </div>
-                                {% endfor %}
+                                <div class="form-group row">
+                                    <label for="id_warehouse" class="col-sm-4 col-form-label">Warehouse:</label>
+                                    <div class="col-sm-8">
+                                        {{ form.warehouse }}
+                                    </div>
+                                </div>
+                                <div class="form-group row">
+                                    <label for="id_num_prices" class="col-sm-4 col-form-label">Number of Prices:</label>
+                                    <div class="col-sm-8">
+                                        {{ form.num_prices }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <button type="button" class="btn btn-primary1" data-toggle="collapse" data-target="#brands-collapse" aria-expanded="false" aria-controls="brands-collapse">
+                                        Show Brands
+                                    </button>
+                                    <div id="brands-collapse" class="collapse mt-3">
+                                        <label for="id_brands">Brands:</label>
+                                        <div>
+                                            <button type="button" class="btn btn-primary1" id="select-all-brands">Select All</button>
+                                            <button type="button" class="btn btn-primary2" id="unselect-all-brands">Unselect All</button>
+                                        </div>
+                                        <div class="form-check mt-3">
+                                            {% for checkbox in form.brands %}
+                                            <div class="form-check large-checkbox">
+                                                <label class="form-check-label large-checkbox-label">
+                                                    {{ checkbox.tag }} {{ checkbox.choice_label }}
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group row">
-                            <label for="id_warehouse" class="col-sm-3 col-form-label">Warehouse:</label>
-                            <div class="col-sm-9">
-                                {{ form.warehouse }}
-                            </div>
-                        </div>
-                        <div class="form-group row">
-                            <label for="id_num_prices" class="col-sm-3 col-form-label">Number of Prices:</label>
-                            <div class="col-sm-9">
-                                {{ form.num_prices }}
-                            </div>
-                        </div>
-                        <div class="form-group row">
+                        <div class="form-group row mt-3">
                             <div class="col-sm-9 offset-sm-3">
                                 <button type="submit" class="btn btn-primary1">Next</button>
                             </div>
@@ -53,18 +80,34 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const selectAllButton = document.getElementById('select-all');
-        const unselectAllButton = document.getElementById('unselect-all');
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        const selectAllGroupsButton = document.getElementById('select-all-groups');
+        const unselectAllGroupsButton = document.getElementById('unselect-all-groups');
+        const groupCheckboxes = document.querySelectorAll('input[name="groups"]');
 
-        selectAllButton.addEventListener('click', function() {
-            checkboxes.forEach(function(checkbox) {
+        selectAllGroupsButton.addEventListener('click', function() {
+            groupCheckboxes.forEach(function(checkbox) {
                 checkbox.checked = true;
             });
         });
 
-        unselectAllButton.addEventListener('click', function() {
-            checkboxes.forEach(function(checkbox) {
+        unselectAllGroupsButton.addEventListener('click', function() {
+            groupCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = false;
+            });
+        });
+
+        const selectAllBrandsButton = document.getElementById('select-all-brands');
+        const unselectAllBrandsButton = document.getElementById('unselect-all-brands');
+        const brandCheckboxes = document.querySelectorAll('input[name="brands"]');
+
+        selectAllBrandsButton.addEventListener('click', function() {
+            brandCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = true;
+            });
+        });
+
+        unselectAllBrandsButton.addEventListener('click', function() {
+            brandCheckboxes.forEach(function(checkbox) {
                 checkbox.checked = false;
             });
         });

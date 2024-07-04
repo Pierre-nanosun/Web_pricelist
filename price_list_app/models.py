@@ -9,12 +9,14 @@ class Configuration(models.Model):
     coefficients = models.JSONField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True, null=True)
     updated = models.DateTimeField(auto_now=True, null=True)
+    selected_brands = models.JSONField(default=list)  # Add this line
 
     class Meta:
         unique_together = ('user', 'warehouse', 'selected_groups', 'num_prices')
 
     def __str__(self):
         return f"{self.user.username}: {self.warehouse}, {self.num_prices} Prices"
+
 class NomenclatureMapping(models.Model):
     key = models.CharField(max_length=10, unique=True)
     value = models.CharField(max_length=50)
@@ -28,3 +30,31 @@ class PanelMapping(models.Model):
 
     def __str__(self):
         return f"{self.key}: {self.value}"
+
+class Brand(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class Logo(models.Model):
+    name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='logos/')
+
+    def __str__(self):
+        return self.name
+
+class PriceLabel(models.Model):
+    PRODUCT_GROUP_CHOICES = [
+        ('Panels', 'Panels'),
+        ('Other', 'Other'),
+    ]
+
+    product_group = models.CharField(max_length=20, choices=PRODUCT_GROUP_CHOICES, unique=True)
+    price_label_1 = models.CharField(max_length=100)
+    price_label_2 = models.CharField(max_length=100)
+    price_label_3 = models.CharField(max_length=100)
+    price_label_4 = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.get_product_group_display()} Price Labels"
