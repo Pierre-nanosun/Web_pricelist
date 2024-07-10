@@ -33,6 +33,19 @@ numeric_columns = [
     'panel_power', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn'
 ]
 
+def your_view(request):
+    dynamic_fields = get_dynamic_fields()
+    num_prices_range = range(1, len(dynamic_fields[0].fields) // 3 + 1)
+
+    paginator = Paginator(num_prices_range, 2)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'input_coefficients.html', {
+        'dynamic_fields': dynamic_fields,
+        'page_obj': page_obj,
+    })
+
 def get_pricelabel_headers():
     headers = {}
     other_headers = {}
@@ -124,13 +137,52 @@ def input_coefficients(request, config_id):
     selected_groups = json.loads(config.selected_groups)
     num_prices = config.num_prices
 
-    try:
-        default_config = json.loads(config.coefficients) if config.coefficients else {}
-    except json.JSONDecodeError:
-        default_config = {}
-
-    # Fetch default headers from PriceLabel
+    # Fetch default headers and coefficients from PriceLabel
     pricelabel_headers = get_pricelabel_headers()
+    default_config = {}
+
+    # Fetch "Other" default config
+    try:
+        other_defaults = PriceLabel.objects.get(product_group='Other')
+    except PriceLabel.DoesNotExist:
+        other_defaults = None
+
+    for group in selected_groups:
+        try:
+            price_label = PriceLabel.objects.get(product_group=group)
+        except PriceLabel.DoesNotExist:
+            price_label = other_defaults
+
+        if price_label:
+            default_config[group] = {
+                'operation_1': price_label.operation_1,
+                'coefficient_1': price_label.coefficient_1,
+                'header_1': price_label.price_label_1,
+                'operation_2': price_label.operation_2,
+                'coefficient_2': price_label.coefficient_2,
+                'header_2': price_label.price_label_2,
+                'operation_3': price_label.operation_3,
+                'coefficient_3': price_label.coefficient_3,
+                'header_3': price_label.price_label_3,
+                'operation_4': price_label.operation_4,
+                'coefficient_4': price_label.coefficient_4,
+                'header_4': price_label.price_label_4,
+            }
+        else:
+            default_config[group] = {
+                'operation_1': '*',
+                'coefficient_1': 1.0,
+                'header_1': pricelabel_headers.get(group, {}).get('price_label_1', 'Price Label 1'),
+                'operation_2': '*',
+                'coefficient_2': 1.0,
+                'header_2': pricelabel_headers.get(group, {}).get('price_label_2', 'Price Label 2'),
+                'operation_3': '*',
+                'coefficient_3': 1.0,
+                'header_3': pricelabel_headers.get(group, {}).get('price_label_3', 'Price Label 3'),
+                'operation_4': '*',
+                'coefficient_4': 1.0,
+                'header_4': pricelabel_headers.get(group, {}).get('price_label_4', 'Price Label 4'),
+            }
 
     if request.method == 'POST':
         form = CoefficientForm(request.POST, groups=selected_groups, num_prices=num_prices,
@@ -365,26 +417,127 @@ def generate_files(request, config_id):
             self.set_font('DejaVu', 'B', 7)
             headers_list = dataframe_copy.columns.tolist()
             page_width = self.w - 2 * self.l_margin
-            cell_widths = {header: self.get_string_width(header) + 2 for header in headers_list}
 
+            # Calculate maximum cell widths based on content
+            cell_widths = {}
             for header in headers_list:
-                for value in dataframe_copy[header]:
-                    cell_widths[header] = max(cell_widths[header], self.get_string_width(str(value)) + 2)
-            cell_widths['Product Name'] = max(cell_widths['Product Name'], 50)
+                max_content_width = max(self.get_string_width(str(value)) for value in dataframe_copy[header]) + 4
+                header_width = self.get_string_width(header.replace('_', ' ').title()) + 4
+                cell_widths[header] = max(max_content_width, header_width)
+
+            # Adjust "Product Name" column margins
+            if "Product Name" in cell_widths:
+                cell_widths["Product Name"] += 0.5 * self.get_string_width(' ')  # Add 0.5 margin on the right
+                # Adding a larger margin on the left by increasing the width significantly
+                cell_widths["Product Name"] += self.get_string_width(' ' * 3)  # Adjust multiplier as needed
+
             total_width = sum(cell_widths.values())
             scale = page_width / total_width
             for header in cell_widths:
                 cell_widths[header] *= scale
 
+            # Function to split text into multiple lines if necessary
+            def split_text(text, cell_width, max_lines=2):
+                words = text.split(' ')
+                lines = []
+                current_line = words[0]
+                for word in words[1:]:
+                    if self.get_string_width(current_line + ' ' + word) <= cell_width - 4:  # Adjust for the extra width
+                        current_line += ' ' + word
+                    else:
+                        lines.append(current_line)
+                        current_line = word
+                    if len(lines) >= max_lines - 1:  # Check if max lines limit is reached
+                        break
+                lines.append(current_line)
+                if len(lines) > max_lines:  # Ensure not exceeding max lines
+                    lines = lines[:max_lines]
+                return lines
+
+            # Split headers and calculate the maximum number of lines for any header
+            max_lines = 2  # Limit headers to 2 lines
+            header_lines_dict = {}
             for header in headers_list:
-                self.cell(cell_widths[header], 10, header.replace('_', ' ').title(), 1, 0, 'C')
-            self.ln()
+                header_lines = split_text(header.replace('_', ' ').title(), cell_widths[header], max_lines=max_lines)
+                header_lines_dict[header] = header_lines
+                max_lines = max(max_lines, len(header_lines))
+
+            # Set header height based on maximum number of lines
+            line_height = 5
+            header_height = max_lines * line_height
+
+            # Adjust widths for columns that need splitting
+            for header in headers_list:
+                if len(header_lines_dict[header]) > 1:
+                    cell_widths[header] *= 0.8  # Reduce width for split headers
+
+            # Redraw and rescale widths to fit page width again
+            total_width = sum(cell_widths.values())
+            scale = page_width / total_width
+            for header in cell_widths:
+                cell_widths[header] *= scale
+
+            # Function to draw headers
+            def draw_headers():
+                y_start = self.get_y()
+                for header in headers_list:
+                    x_start = self.get_x()
+                    for i, line in enumerate(header_lines_dict[header]):
+                        self.set_xy(x_start, y_start + i * line_height)
+                        self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
+                    self.set_xy(x_start + cell_widths[header], y_start)
+                self.set_y(y_start + header_height)
+                # Draw header borders
+                self.set_y(y_start)
+                x_start = self.l_margin
+                for header in headers_list:
+                    self.set_xy(x_start, y_start)
+                    self.multi_cell(cell_widths[header], header_height, '', 1, 'C')
+                    x_start += cell_widths[header]
+
+            draw_headers()
 
             self.set_font('DejaVu', '', 7)
+            # Draw rows
             for row in dataframe_copy.itertuples(index=False):
+                # Split content cells
+                row_lines_dict = {}
+                max_row_lines = 1
                 for header in headers_list:
-                    self.cell(cell_widths[header], 10, str(row[headers_list.index(header)]), 1, 0)
-                self.ln()
+                    cell_text = str(row[headers_list.index(header)])
+                    if header in ["Colour", "Product Name", "Design"]:
+                        row_lines = split_text(cell_text, cell_widths[header], max_lines=2)
+                    else:
+                        row_lines = [cell_text]
+                    row_lines_dict[header] = row_lines
+                    max_row_lines = max(max_row_lines, len(row_lines))
+
+                row_height = max_row_lines * line_height
+                y_start = self.get_y()
+
+                # Check if we need a page break
+                if y_start + row_height > self.page_break_trigger:
+                    self.add_page()
+                    draw_headers()
+                    y_start = self.get_y()
+
+                # Draw cells with uniform height
+                for header in headers_list:
+                    x_start = self.get_x()
+                    for i, line in enumerate(row_lines_dict[header]):
+                        self.set_xy(x_start, y_start + i * line_height)
+                        self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
+                    self.set_xy(x_start + cell_widths[header], y_start)
+
+                self.set_y(y_start + row_height)
+                # Draw row borders
+                self.set_y(y_start)
+                x_start = self.l_margin
+                for header in headers_list:
+                    self.set_xy(x_start, y_start)
+                    self.multi_cell(cell_widths[header], row_height, '', 1, 'C')
+                    x_start += cell_widths[header]
+
 
         def add_toc_page(self):
             max_pages = 2

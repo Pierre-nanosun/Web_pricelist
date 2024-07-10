@@ -40,7 +40,7 @@ class CoefficientForm(forms.Form):
                 header_key = f'{group}_header_{i}'
 
                 operation_default = default_config.get(group, {}).get(f'operation_{i}', '*')
-                coefficient_default = default_config.get(group, {}).get(f'coefficient_{i}', 1.2)
+                coefficient_default = default_config.get(group, {}).get(f'coefficient_{i}', 1.0)
                 header_default = default_config.get(group, {}).get(f'header_{i}', pricelabel_headers.get(group, {}).get(f'price_label_{i}', pricelabel_headers.get('Other', {}).get(f'price_label_{i}', f'price_label_{i}')))
 
                 self.fields[operation_key] = forms.ChoiceField(

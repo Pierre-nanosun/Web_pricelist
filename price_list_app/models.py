@@ -50,11 +50,26 @@ class PriceLabel(models.Model):
         ('Other', 'Other'),
     ]
 
+    OPERATION_CHOICES = [
+        ('*', 'Multiplication'),
+        ('+', 'Addition'),
+    ]
+
     product_group = models.CharField(max_length=20, choices=PRODUCT_GROUP_CHOICES, unique=True)
     price_label_1 = models.CharField(max_length=100)
     price_label_2 = models.CharField(max_length=100)
     price_label_3 = models.CharField(max_length=100)
     price_label_4 = models.CharField(max_length=100)
+
+    operation_1 = models.CharField(max_length=1, choices=OPERATION_CHOICES, default='*')
+    operation_2 = models.CharField(max_length=1, choices=OPERATION_CHOICES, default='*')
+    operation_3 = models.CharField(max_length=1, choices=OPERATION_CHOICES, default='*')
+    operation_4 = models.CharField(max_length=1, choices=OPERATION_CHOICES, default='*')
+
+    coefficient_1 = models.FloatField(default=1.0)
+    coefficient_2 = models.FloatField(default=1.0)
+    coefficient_3 = models.FloatField(default=1.0)
+    coefficient_4 = models.FloatField(default=1.0)
 
     def __str__(self):
         return f"{self.get_product_group_display()} Price Labels"
