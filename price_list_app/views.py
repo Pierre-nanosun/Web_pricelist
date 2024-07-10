@@ -33,18 +33,6 @@ numeric_columns = [
     'panel_power', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn'
 ]
 
-def your_view(request):
-    dynamic_fields = get_dynamic_fields()
-    num_prices_range = range(1, len(dynamic_fields[0].fields) // 3 + 1)
-
-    paginator = Paginator(num_prices_range, 2)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    return render(request, 'input_coefficients.html', {
-        'dynamic_fields': dynamic_fields,
-        'page_obj': page_obj,
-    })
 
 def get_pricelabel_headers():
     headers = {}
@@ -112,23 +100,37 @@ def logout_view(request):
 @login_required
 def select_products(request):
     if request.method == 'POST':
-        form = SelectionForm(request.POST)
-        if form.is_valid():
-            selected_groups = list(form.cleaned_data['groups'].values_list('value', flat=True))
-            selected_brands = list(form.cleaned_data['brands'].values_list('name', flat=True))
-            warehouse = form.cleaned_data['warehouse']
-            num_prices = form.cleaned_data['num_prices']
-            config, created = Configuration.objects.get_or_create(
-                user=request.user,
-                selected_groups=json.dumps(selected_groups),
-                selected_brands=json.dumps(selected_brands),
-                warehouse=warehouse,
-                num_prices=num_prices,
-                defaults={'coefficients': json.dumps({})}
-            )
-            return redirect('input_coefficients', config_id=config.id)
+        if 'delete_config' in request.POST:
+            config_id = request.POST.get('configurations')
+            if config_id:
+                Configuration.objects.filter(id=config_id, user=request.user).delete()
+                return redirect('select_products')
+        elif 'modify_config' in request.POST:
+            config_id = request.POST.get('configurations')
+            if config_id:
+                return redirect('input_coefficients', config_id=config_id)
+        elif 'generate_config' in request.POST:
+            config_id = request.POST.get('configurations')
+            if config_id:
+                return redirect('generate_files', config_id=config_id)
+        else:
+            form = SelectionForm(request.POST, user=request.user)
+            if form.is_valid():
+                selected_groups = list(form.cleaned_data['groups'].values_list('value', flat=True))
+                selected_brands = list(form.cleaned_data['brands'].values_list('name', flat=True))
+                warehouse = form.cleaned_data['warehouse']
+                num_prices = form.cleaned_data['num_prices']
+                config, created = Configuration.objects.get_or_create(
+                    user=request.user,
+                    selected_groups=json.dumps(selected_groups),
+                    selected_brands=json.dumps(selected_brands),
+                    warehouse=warehouse,
+                    num_prices=num_prices,
+                    defaults={'coefficients': json.dumps({})}
+                )
+                return redirect('input_coefficients', config_id=config.id)
     else:
-        form = SelectionForm()
+        form = SelectionForm(user=request.user)
     return render(request, 'price_list_app/select_products.html', {'form': form})
 
 @login_required
@@ -136,12 +138,9 @@ def input_coefficients(request, config_id):
     config = get_object_or_404(Configuration, id=config_id)
     selected_groups = json.loads(config.selected_groups)
     num_prices = config.num_prices
-
-    # Fetch default headers and coefficients from PriceLabel
     pricelabel_headers = get_pricelabel_headers()
     default_config = {}
 
-    # Fetch "Other" default config
     try:
         other_defaults = PriceLabel.objects.get(product_group='Other')
     except PriceLabel.DoesNotExist:
@@ -188,18 +187,20 @@ def input_coefficients(request, config_id):
         form = CoefficientForm(request.POST, groups=selected_groups, num_prices=num_prices,
                                default_config=default_config, pricelabel_headers=pricelabel_headers, warehouse=config.warehouse)
         if form.is_valid():
-            coefficients = {}
-            for group in selected_groups:
-                coefficients[group] = {}
-                for i in range(1, num_prices + 1):
-                    coefficients[group][f'operation_{i}'] = form.cleaned_data[f'{group}_operation_{i}']
-                    coefficients[group][f'coefficient_{i}'] = form.cleaned_data[f'{group}_coefficient_{i}']
-                    coefficients[group][f'header_{i}'] = form.cleaned_data[f'{group}_header_{i}']
-            config.coefficients = json.dumps(coefficients)
-            config.save()
+            if 'save_and_generate' in request.POST:
+                config.name = form.cleaned_data['name']
+                coefficients = {}
+                for group in selected_groups:
+                    coefficients[group] = {}
+                    for i in range(1, num_prices + 1):
+                        coefficients[group][f'operation_{i}'] = form.cleaned_data[f'{group}_operation_{i}']
+                        coefficients[group][f'coefficient_{i}'] = form.cleaned_data[f'{group}_coefficient_{i}']
+                        coefficients[group][f'header_{i}'] = form.cleaned_data[f'{group}_header_{i}']
+                config.coefficients = json.dumps(coefficients)
+                config.save()
             return redirect('generate_files', config_id=config.id)
     else:
-        form = CoefficientForm(groups=selected_groups, num_prices=num_prices, default_config=default_config,
+        form = CoefficientForm(initial={'name': config.name}, groups=selected_groups, num_prices=num_prices, default_config=default_config,
                                pricelabel_headers=pricelabel_headers, warehouse=config.warehouse)
 
     dynamic_fields = [
@@ -218,7 +219,6 @@ def input_coefficients(request, config_id):
 
     return render(request, 'price_list_app/input_coefficients.html',
                   {'form': form, 'num_prices_range': range(1, num_prices + 1), 'dynamic_fields': dynamic_fields})
-
 
 def load_logos():
     logo_dict = {}

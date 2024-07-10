@@ -1,7 +1,7 @@
 # forms.py
 
 from django import forms
-from .models import NomenclatureMapping, Brand
+from .models import NomenclatureMapping, Brand, Configuration
 
 class SelectionForm(forms.Form):
     WAREHOUSE_CHOICES = [
@@ -23,8 +23,21 @@ class SelectionForm(forms.Form):
         label='Brands',
         initial=Brand.objects.all()
     )
+    configurations = forms.ModelChoiceField(
+        queryset=Configuration.objects.none(),  # Populated in the view
+        required=False,
+        label='Saved Configurations'
+    )
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['configurations'].queryset = Configuration.objects.filter(user=user)
 
 class CoefficientForm(forms.Form):
+    name = forms.CharField(max_length=100, required=False, label="Configuration Name")
+
     def __init__(self, *args, **kwargs):
         groups = kwargs.pop('groups')
         num_prices = kwargs.pop('num_prices')

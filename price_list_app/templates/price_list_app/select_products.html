@@ -11,6 +11,11 @@
                 <div class="card-body">
                     <form method="post">
                         {% csrf_token %}
+                        <div class="form-group">
+                            <label for="id_configurations">Saved Configurations:</label>
+                            {{ form.configurations }}
+                            <button type="submit" name="delete_config" class="btn btn-danger">Delete</button>
+                        </div>
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">

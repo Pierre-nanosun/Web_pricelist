@@ -3,19 +3,20 @@ from django.db import models
 
 class Configuration(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100, default="Unnamed Configuration")
     selected_groups = models.JSONField()
     warehouse = models.CharField(max_length=50)
     num_prices = models.IntegerField()
     coefficients = models.JSONField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True, null=True)
     updated = models.DateTimeField(auto_now=True, null=True)
-    selected_brands = models.JSONField(default=list)  # Add this line
+    selected_brands = models.JSONField(default=list)
 
     class Meta:
         unique_together = ('user', 'warehouse', 'selected_groups', 'num_prices')
 
     def __str__(self):
-        return f"{self.user.username}: {self.warehouse}, {self.num_prices} Prices"
+        return f"{self.name} ({self.user.username}: {self.warehouse}, {self.num_prices} Prices)"
 
 class NomenclatureMapping(models.Model):
     key = models.CharField(max_length=10, unique=True)
