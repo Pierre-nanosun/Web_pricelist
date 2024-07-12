@@ -17,6 +17,10 @@ urlpatterns = [
     path('view_pdf/', views.view_pdf, name='view_pdf'),
     path('oauth/', include('social_django.urls', namespace='social')),
     path('update-csv/', views.update_csv_view, name='update_csv'),
+    path('generate_promotion_pricelist/', views.generate_promotion_pricelist, name='generate_promotion_pricelist'),
+    path('promotion_results/', views.promotion_results, name='promotion_results'),
+    path('download_pdf_promotion/', views.download_pdf_promotion, name='download_pdf_promotion'),
+    path('download_excel_promotion/', views.download_excel_promotion, name='download_excel_promotion'),
     ]
 
 if settings.DEBUG:

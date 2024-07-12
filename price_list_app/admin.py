@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import NomenclatureMapping, PanelMapping, Configuration, Brand, Logo, PriceLabel
+from .models import NomenclatureMapping, PanelMapping, Configuration, Brand, Logo, PriceLabel, Promotion
 from django import forms
 from jsoneditor.forms import JSONEditor
 
@@ -7,6 +7,7 @@ from jsoneditor.forms import JSONEditor
 admin.site.register(NomenclatureMapping)
 admin.site.register(PanelMapping)
 admin.site.register(Brand)
+admin.site.register(Promotion)
 
 class ConfigurationAdminForm(forms.ModelForm):
     class Meta:

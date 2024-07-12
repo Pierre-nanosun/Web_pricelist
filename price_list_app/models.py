@@ -3,7 +3,7 @@ from django.db import models
 
 class Configuration(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    name = models.CharField(max_length=100, default="Unnamed Configuration")
+    name = models.CharField(max_length=100)
     selected_groups = models.JSONField()
     warehouse = models.CharField(max_length=50)
     num_prices = models.IntegerField()
@@ -11,12 +11,11 @@ class Configuration(models.Model):
     created = models.DateTimeField(auto_now_add=True, null=True)
     updated = models.DateTimeField(auto_now=True, null=True)
     selected_brands = models.JSONField(default=list)
-
-    class Meta:
-        unique_together = ('user', 'warehouse', 'selected_groups', 'num_prices')
+    select_all_brands = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.name} ({self.user.username}: {self.warehouse}, {self.num_prices} Prices)"
+
 
 class NomenclatureMapping(models.Model):
     key = models.CharField(max_length=10, unique=True)
@@ -74,3 +73,11 @@ class PriceLabel(models.Model):
 
     def __str__(self):
         return f"{self.get_product_group_display()} Price Labels"
+
+class Promotion(models.Model):
+    product_name = models.CharField(max_length=255)
+    selling_price = models.FloatField()
+
+    def __str__(self):
+        return f"{self.product_name} - {self.selling_price}"
+

@@ -1,0 +1,12 @@
+{% extends 'price_list_app/base.html' %}
+{% load static %}
+
+{% block title %}Results{% endblock %}
+
+{% block content %}
+<h2 class="my-4">Generated Files</h2>
+<div class="text-center">
+    <a class="btn btn-primary btn-lg" href="{% url 'download_pdf_promotion' %}" role="button">Download PDF</a>
+    <a class="btn btn-success btn-lg" href="{% url 'download_excel_promotion' %}" role="button">Download Excel</a>
+</div>
+{% endblock %}

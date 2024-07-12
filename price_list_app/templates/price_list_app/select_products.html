@@ -11,12 +11,14 @@
                 <div class="card-body">
                     <form method="post">
                         {% csrf_token %}
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="id_configurations">Saved Configurations:</label>
                             {{ form.configurations }}
                             <button type="submit" name="delete_config" class="btn btn-danger">Delete</button>
+                            <button type="submit" name="modify_config" class="btn btn-warning">Modify</button>
+                            <button type="submit" name="generate_config" class="btn btn-success">Generate</button>
                         </div>
-                        <div class="row">
+                        <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="id_groups">Product Types:</label>
@@ -34,22 +36,13 @@
                                         {% endfor %}
                                     </div>
                                 </div>
-                                <div class="form-group row">
-                                    <label for="id_warehouse" class="col-sm-4 col-form-label">Warehouse:</label>
-                                    <div class="col-sm-8">
-                                        {{ form.warehouse }}
-                                    </div>
-                                </div>
-                                <div class="form-group row">
-                                    <label for="id_num_prices" class="col-sm-4 col-form-label">Number of Prices:</label>
-                                    <div class="col-sm-8">
-                                        {{ form.num_prices }}
-                                    </div>
-                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <button type="button" class="btn btn-primary1" data-toggle="collapse" data-target="#brands-collapse" aria-expanded="false" aria-controls="brands-collapse">
+                                    <div class="form-check mt-3 mb-3">
+                                        {{ form.select_all_brands }} <label for="id_select_all_brands">Select All Brands</label>
+                                    </div>
+                                    <button type="button" class="btn btn-primary1 mb-3" data-toggle="collapse" data-target="#brands-collapse" aria-expanded="false" aria-controls="brands-collapse">
                                         Show Brands
                                     </button>
                                     <div id="brands-collapse" class="collapse mt-3">
@@ -68,12 +61,28 @@
                                             {% endfor %}
                                         </div>
                                     </div>
+                                    <div class="form-group row mt-3 mb-3">
+                                        <label for="id_warehouse" class="col-sm-4 col-form-label">Warehouse:</label>
+                                        <div class="col-sm-8">
+                                            {{ form.warehouse }}
+                                        </div>
+                                    </div>
+                                    <div class="form-group row mb-3">
+                                        <label for="id_num_prices" class="col-sm-4 col-form-label">Number of Prices:</label>
+                                        <div class="col-sm-8">
+                                            {{ form.num_prices }}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group row mt-3">
+                        <div class="form-group row mt-3 mb-3">
                             <div class="col-sm-9 offset-sm-3">
                                 <button type="submit" class="btn btn-primary1">Next</button>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <button type="submit" name="generate_promotion_pricelist" class="btn btn-secondary">Generate Promotion Pricelist</button>
+                                </form>
                             </div>
                         </div>
                     </form>
@@ -101,6 +110,7 @@
             });
         });
 
+        const selectAllBrandsCheckbox = document.querySelector('input[name="select_all_brands"]');
         const selectAllBrandsButton = document.getElementById('select-all-brands');
         const unselectAllBrandsButton = document.getElementById('unselect-all-brands');
         const brandCheckboxes = document.querySelectorAll('input[name="brands"]');
@@ -117,10 +127,27 @@
             });
         });
 
-        // Preselect all brand checkboxes when the page loads
-        brandCheckboxes.forEach(function(checkbox) {
-            checkbox.checked = true;
+        selectAllBrandsCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            if (isChecked) {
+                brandCheckboxes.forEach(function(checkbox) {
+                    checkbox.checked = true;
+                    checkbox.disabled = true;
+                });
+            } else {
+                brandCheckboxes.forEach(function(checkbox) {
+                    checkbox.disabled = false;
+                });
+            }
         });
+
+        // Disable brand checkboxes if "Select All Brands" is checked
+        if (selectAllBrandsCheckbox.checked) {
+            brandCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = true;
+                checkbox.disabled = true;
+            });
+        }
     });
 </script>
 {% endblock %}

@@ -9,11 +9,12 @@ from django.contrib.auth import logout, login
 from django.contrib.auth.forms import AuthenticationForm
 from django.conf import settings
 from .forms import SelectionForm, CoefficientForm
-from .models import Configuration, NomenclatureMapping, PanelMapping, Logo, PriceLabel
+from .models import Configuration, NomenclatureMapping, PanelMapping, Logo, PriceLabel, Brand, Promotion
 from fpdf import FPDF
 from PyPDF2 import PdfReader, PdfWriter
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,8 @@ def logout_view(request):
     logout(request)
     return redirect('home')
 
+
+
 @login_required
 def select_products(request):
     if request.method == 'POST':
@@ -113,25 +116,37 @@ def select_products(request):
             config_id = request.POST.get('configurations')
             if config_id:
                 return redirect('generate_files', config_id=config_id)
+        elif 'generate_promotion_pricelist' in request.POST:
+            return redirect('generate_promotion_pricelist')
         else:
             form = SelectionForm(request.POST, user=request.user)
             if form.is_valid():
                 selected_groups = list(form.cleaned_data['groups'].values_list('value', flat=True))
-                selected_brands = list(form.cleaned_data['brands'].values_list('name', flat=True))
                 warehouse = form.cleaned_data['warehouse']
                 num_prices = form.cleaned_data['num_prices']
-                config, created = Configuration.objects.get_or_create(
+                select_all_brands = form.cleaned_data.get('select_all_brands', False)
+
+                if select_all_brands:
+                    selected_brands = []  # Store an empty list as we will handle this dynamically
+                else:
+                    selected_brands = list(form.cleaned_data['brands'].values_list('name', flat=True))
+
+                config_name = f"Configuration {datetime.now().strftime('%Y%m%d%H%M%S')}"
+                config = Configuration.objects.create(
                     user=request.user,
+                    name=config_name,
                     selected_groups=json.dumps(selected_groups),
                     selected_brands=json.dumps(selected_brands),
                     warehouse=warehouse,
                     num_prices=num_prices,
-                    defaults={'coefficients': json.dumps({})}
+                    coefficients=json.dumps({}),
+                    select_all_brands=select_all_brands  # Save the select_all_brands flag
                 )
                 return redirect('input_coefficients', config_id=config.id)
     else:
         form = SelectionForm(user=request.user)
     return render(request, 'price_list_app/select_products.html', {'form': form})
+
 
 @login_required
 def input_coefficients(request, config_id):
@@ -187,17 +202,16 @@ def input_coefficients(request, config_id):
         form = CoefficientForm(request.POST, groups=selected_groups, num_prices=num_prices,
                                default_config=default_config, pricelabel_headers=pricelabel_headers, warehouse=config.warehouse)
         if form.is_valid():
-            if 'save_and_generate' in request.POST:
-                config.name = form.cleaned_data['name']
-                coefficients = {}
-                for group in selected_groups:
-                    coefficients[group] = {}
-                    for i in range(1, num_prices + 1):
-                        coefficients[group][f'operation_{i}'] = form.cleaned_data[f'{group}_operation_{i}']
-                        coefficients[group][f'coefficient_{i}'] = form.cleaned_data[f'{group}_coefficient_{i}']
-                        coefficients[group][f'header_{i}'] = form.cleaned_data[f'{group}_header_{i}']
-                config.coefficients = json.dumps(coefficients)
-                config.save()
+            config.name = form.cleaned_data['name']
+            coefficients = {}
+            for group in selected_groups:
+                coefficients[group] = {}
+                for i in range(1, num_prices + 1):
+                    coefficients[group][f'operation_{i}'] = form.cleaned_data[f'{group}_operation_{i}']
+                    coefficients[group][f'coefficient_{i}'] = form.cleaned_data[f'{group}_coefficient_{i}']
+                    coefficients[group][f'header_{i}'] = form.cleaned_data[f'{group}_header_{i}']
+            config.coefficients = json.dumps(coefficients)
+            config.save()
             return redirect('generate_files', config_id=config.id)
     else:
         form = CoefficientForm(initial={'name': config.name}, groups=selected_groups, num_prices=num_prices, default_config=default_config,
@@ -241,11 +255,20 @@ def convert_to_non_interlaced(image_path):
 @login_required
 def generate_files(request, config_id):
     config = get_object_or_404(Configuration, id=config_id)
+    user_directory = os.path.join(output_dir, request.user.username)
+    if not os.path.exists(user_directory):
+        os.makedirs(user_directory)
+
     selected_groups = json.loads(config.selected_groups)
-    selected_brands = json.loads(config.selected_brands)
     warehouse = config.warehouse
     num_prices = config.num_prices
     coefficients = json.loads(config.coefficients)
+
+    # Handle dynamic selection of brands
+    if config.select_all_brands:
+        selected_brands = list(Brand.objects.all().values_list('name', flat=True))
+    else:
+        selected_brands = json.loads(config.selected_brands)
 
     df = read_csv()
     df = df[df['Group'].isin(selected_groups)]
@@ -268,6 +291,13 @@ def generate_files(request, config_id):
             row[f'price_label_{j}'] = round(price, 3) if group == 'Panels' else round(price, 0)
         return row
 
+    if warehouse == 'Decin':
+        availability_column = 'available_cz'
+    else:
+        df['custom_available'] = df['available'] - df['available_cz']
+        availability_column = 'custom_available'
+
+    df = df[df[availability_column] > 0]
     df = df.apply(apply_coefficients, axis=1)
 
     for j in range(1, num_prices + 1):
@@ -275,14 +305,10 @@ def generate_files(request, config_id):
         if price_col not in df.columns:
             df[price_col] = 0
 
-    availability_column = 'available_cz' if warehouse == 'Decin' else 'available'
-    df = df[df[availability_column] > 0]
 
     grouped_df = df.groupby(['Group', 'brand', 'product_name'], as_index=False).agg({
-        'available': 'sum',
-        'available_cz': 'sum',
+        availability_column: 'sum',
         'bp_eur': 'max',
-        'bp_eur_cz': 'max',
         **{f'price_label_{j}': 'max' for j in range(1, num_prices + 1)},
         'delivery_month': 'first',
         'delivery_cw': 'first',
@@ -301,18 +327,16 @@ def generate_files(request, config_id):
     grouped_df['Group'] = pd.Categorical(grouped_df['Group'], categories=custom_order, ordered=True)
     grouped_df = grouped_df.sort_values('Group').reset_index(drop=True)
 
-    # Get headers from coefficients
     headers = {}
     for group in selected_groups:
         headers[group] = {}
         for i in range(1, num_prices + 1):
             headers[group][f'price_label_{i}'] = coefficients.get(group, {}).get(f'header_{i}', f'price_label_{i}')
-    # Ensure 'Other' group is always included
     if 'Other' not in headers:
         headers['Other'] = get_pricelabel_headers().get('Other', {})
 
     final_columns = [
-        'Group', 'brand', 'product_name', 'available', 'delivery_month', 'delivery_cw',
+        'Group', 'brand', 'product_name', availability_column, 'delivery_month', 'delivery_cw',
         'panel_power', 'panel_colour', 'panel_design', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn',
         *[f'price_label_{j}' for j in range(1, num_prices + 1)]
     ]
@@ -327,7 +351,7 @@ def generate_files(request, config_id):
         'Group': 'Product Group',
         'brand': 'Brand',
         'product_name': 'Product Name',
-        'available': 'Available',
+        availability_column: 'Available',
         'delivery_month': 'Delivery',
         'delivery_cw': 'CW',
         'panel_power': 'Power(W)',
@@ -365,10 +389,10 @@ def generate_files(request, config_id):
             self.set_font('DejaVu', 'B', 10)
             self.cell(0, 10, 'Price List', 0, 1, 'C')
 
-        def footer(self):
-            self.set_y(-15)
-            self.set_font('DejaVu', 'I', 8)
-            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+        #def footer(self):
+        #    self.set_y(-15)
+        #    self.set_font('DejaVu', 'I', 8)
+        #    self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
 
         def chapter_title(self, title, group=False):
             if self.get_y() > self.h - 70:
@@ -402,14 +426,9 @@ def generate_files(request, config_id):
             self.ln(height)
 
         def add_table(self, dataframe, group, headers):
-            # Drop unnecessary columns and empty columns
             dataframe = dataframe.drop(columns=['Product Group', 'Brand'], errors='ignore')
             dataframe = dataframe.loc[:, ~(dataframe == "").all()]
-
-            # Create a copy of the dataframe to avoid modifying the original one
             dataframe_copy = dataframe.copy()
-
-            # Replace column names based on the provided headers for the specific group
             for col in dataframe.columns:
                 if col in headers[group]:
                     dataframe_copy.rename(columns={col: headers[group][col]}, inplace=True)
@@ -417,67 +436,53 @@ def generate_files(request, config_id):
             self.set_font('DejaVu', 'B', 7)
             headers_list = dataframe_copy.columns.tolist()
             page_width = self.w - 2 * self.l_margin
-
-            # Calculate maximum cell widths based on content
             cell_widths = {}
             for header in headers_list:
                 max_content_width = max(self.get_string_width(str(value)) for value in dataframe_copy[header]) + 4
                 header_width = self.get_string_width(header.replace('_', ' ').title()) + 4
                 cell_widths[header] = max(max_content_width, header_width)
-
-            # Adjust "Product Name" column margins
             if "Product Name" in cell_widths:
-                cell_widths["Product Name"] += 0.5 * self.get_string_width(' ')  # Add 0.5 margin on the right
-                # Adding a larger margin on the left by increasing the width significantly
-                cell_widths["Product Name"] += self.get_string_width(' ' * 3)  # Adjust multiplier as needed
-
+                cell_widths["Product Name"] += 0.5 * self.get_string_width(' ')
+                cell_widths["Product Name"] += self.get_string_width(' ' * 3)
             total_width = sum(cell_widths.values())
             scale = page_width / total_width
             for header in cell_widths:
                 cell_widths[header] *= scale
 
-            # Function to split text into multiple lines if necessary
             def split_text(text, cell_width, max_lines=2):
                 words = text.split(' ')
                 lines = []
                 current_line = words[0]
                 for word in words[1:]:
-                    if self.get_string_width(current_line + ' ' + word) <= cell_width - 4:  # Adjust for the extra width
+                    if self.get_string_width(current_line + ' ' + word) <= cell_width - 4:
                         current_line += ' ' + word
                     else:
                         lines.append(current_line)
                         current_line = word
-                    if len(lines) >= max_lines - 1:  # Check if max lines limit is reached
+                    if len(lines) >= max_lines - 1:
                         break
                 lines.append(current_line)
-                if len(lines) > max_lines:  # Ensure not exceeding max lines
+                if len(lines) > max_lines:
                     lines = lines[:max_lines]
                 return lines
 
-            # Split headers and calculate the maximum number of lines for any header
-            max_lines = 2  # Limit headers to 2 lines
+            max_lines = 2
             header_lines_dict = {}
             for header in headers_list:
                 header_lines = split_text(header.replace('_', ' ').title(), cell_widths[header], max_lines=max_lines)
                 header_lines_dict[header] = header_lines
                 max_lines = max(max_lines, len(header_lines))
 
-            # Set header height based on maximum number of lines
             line_height = 5
             header_height = max_lines * line_height
-
-            # Adjust widths for columns that need splitting
             for header in headers_list:
                 if len(header_lines_dict[header]) > 1:
-                    cell_widths[header] *= 0.8  # Reduce width for split headers
-
-            # Redraw and rescale widths to fit page width again
+                    cell_widths[header] *= 0.8
             total_width = sum(cell_widths.values())
             scale = page_width / total_width
             for header in cell_widths:
                 cell_widths[header] *= scale
 
-            # Function to draw headers
             def draw_headers():
                 y_start = self.get_y()
                 for header in headers_list:
@@ -487,7 +492,6 @@ def generate_files(request, config_id):
                         self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
                     self.set_xy(x_start + cell_widths[header], y_start)
                 self.set_y(y_start + header_height)
-                # Draw header borders
                 self.set_y(y_start)
                 x_start = self.l_margin
                 for header in headers_list:
@@ -498,9 +502,7 @@ def generate_files(request, config_id):
             draw_headers()
 
             self.set_font('DejaVu', '', 7)
-            # Draw rows
             for row in dataframe_copy.itertuples(index=False):
-                # Split content cells
                 row_lines_dict = {}
                 max_row_lines = 1
                 for header in headers_list:
@@ -514,14 +516,10 @@ def generate_files(request, config_id):
 
                 row_height = max_row_lines * line_height
                 y_start = self.get_y()
-
-                # Check if we need a page break
                 if y_start + row_height > self.page_break_trigger:
                     self.add_page()
                     draw_headers()
                     y_start = self.get_y()
-
-                # Draw cells with uniform height
                 for header in headers_list:
                     x_start = self.get_x()
                     for i, line in enumerate(row_lines_dict[header]):
@@ -530,14 +528,12 @@ def generate_files(request, config_id):
                     self.set_xy(x_start + cell_widths[header], y_start)
 
                 self.set_y(y_start + row_height)
-                # Draw row borders
                 self.set_y(y_start)
                 x_start = self.l_margin
                 for header in headers_list:
                     self.set_xy(x_start, y_start)
                     self.multi_cell(cell_widths[header], row_height, '', 1, 'C')
                     x_start += cell_widths[header]
-
 
         def add_toc_page(self):
             max_pages = 2
@@ -550,15 +546,12 @@ def generate_files(request, config_id):
                 self.add_page()
                 self._render_toc(data, initial_font_size, row_height)
                 pages_used = self.page_no()
-
                 if pages_used <= max_pages:
                     break
-
                 initial_font_size -= 0.5
                 row_height -= 0.2
                 self._reset_document()
-
-            self.output(os.path.join(output_dir, 'table_of_contents.pdf'))
+            self.output(os.path.join(user_directory, 'table_of_contents.pdf'))
 
         def _prepare_data(self):
             data = []
@@ -577,29 +570,19 @@ def generate_files(request, config_id):
             self.cell(0, 8, 'Table of Contents', 0, 1, 'C')
             self.ln(1)
             self.set_font('DejaVu', '', font_size - 2)
-
             col_width = (self.w - 2 * self.l_margin) / 3
             for i, row in enumerate(data):
                 self.set_text_color(0, 0, 0)
                 self.set_font('DejaVu', 'B', font_size - 2)
-
-                # Draw chapter cell
                 self.cell(col_width, row_height, str(row[0]), 0, 0, 'L')
                 x_chapter_end = self.get_x()
-
-                # Draw brand cell
                 self.cell(col_width, row_height, str(row[1]), 0, 0, 'L')
                 x_brand_end = self.get_x()
-
-                # Draw page cell
                 self.cell(col_width, row_height, str(row[2]), 0, 0, 'R')
                 x_page_end = self.get_x()
-
-                # Draw dashed lines
                 y = self.get_y() + row_height
                 self._draw_dashed_line(x_chapter_end, y, x_brand_end - x_chapter_end, row_height)
                 self._draw_dashed_line(x_brand_end, y, x_page_end - x_brand_end, row_height)
-
                 self.ln(row_height)
             self.ln(2)
 
@@ -637,7 +620,7 @@ def generate_files(request, config_id):
                 pdf.add_table(brand_df, group, headers)
                 pdf.ln(10)
 
-    content_pdf_output = os.path.join(output_dir, 'content.pdf')
+    content_pdf_output = os.path.join(user_directory, 'content.pdf')
     pdf.output(content_pdf_output)
 
     toc_temp = PDF(orientation='L')
@@ -647,7 +630,7 @@ def generate_files(request, config_id):
     toc_temp.toc = pdf.toc
     toc_temp.add_toc_page()
 
-    toc_temp_output = os.path.join(output_dir, 'toc_temp.pdf')
+    toc_temp_output = os.path.join(user_directory, 'toc_temp.pdf')
     toc_temp.output(toc_temp_output)
 
     toc_temp_reader = PdfReader(toc_temp_output)
@@ -662,7 +645,7 @@ def generate_files(request, config_id):
     final_toc.toc = adjusted_toc
     final_toc.add_toc_page()
 
-    final_toc_output = os.path.join(output_dir, 'final_toc.pdf')
+    final_toc_output = os.path.join(user_directory, 'final_toc.pdf')
     final_toc.output(final_toc_output)
 
     final_toc_reader = PdfReader(final_toc_output)
@@ -675,7 +658,7 @@ def generate_files(request, config_id):
     for page_num in range(len(content_pdf_reader.pages)):
         final_pdf_writer.add_page(content_pdf_reader.pages[page_num])
 
-    final_output = os.path.join(output_dir, 'price_list_with_selling_prices.pdf')
+    final_output = os.path.join(user_directory, 'price_list_with_selling_prices.pdf')
     with open(final_output, 'wb') as f:
         final_pdf_writer.write(f)
 
@@ -683,38 +666,55 @@ def generate_files(request, config_id):
     os.remove(toc_temp_output)
     os.remove(final_toc_output)
 
-    excel_output = os.path.join(output_dir, 'price_list_with_selling_prices.xlsx')
+    excel_output = os.path.join(user_directory, 'price_list_with_selling_prices.xlsx')
     final_df.to_excel(excel_output, index=False)
 
     return redirect('results')
 
-
-
 @login_required
 def download_pdf(request):
-    file_path = os.path.join(output_dir, 'price_list_with_selling_prices.pdf')
+    user_directory = os.path.join(output_dir, request.user.username)
+    file_path = os.path.join(user_directory, 'price_list_with_selling_prices.pdf')
     if os.path.exists(file_path):
         return FileResponse(open(file_path, 'rb'), content_type='application/pdf', as_attachment=True, filename='price_list_with_selling_prices.pdf')
     return redirect('results')
 
 @login_required
+def download_pdf_promotion(request):
+    file_path = os.path.join(output_dir, 'price_list_with_selling_prices.pdf')
+    if os.path.exists(file_path):
+        return FileResponse(open(file_path, 'rb'), content_type='application/pdf', as_attachment=True, filename='price_list_with_selling_prices.pdf')
+    return redirect('promotion_results')
+
+@login_required
 def download_excel(request):
-    file_path = os.path.join(output_dir, 'price_list_with_selling_prices.xlsx')
+    user_directory = os.path.join(output_dir, request.user.username)
+    file_path = os.path.join(user_directory, 'price_list_with_selling_prices.xlsx')
     if os.path.exists(file_path):
         return FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, filename='price_list_with_selling_prices.xlsx')
     return redirect('results')
 
 @login_required
+def download_excel_promotion(request):
+    file_path = os.path.join(output_dir, 'price_list_with_selling_prices.xlsx')
+    if os.path.exists(file_path):
+        return FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, filename='price_list_with_selling_prices.xlsx')
+    return redirect('promotion_results')
+
+
+@login_required
 def view_pdf(request):
-    file_path = os.path.join(output_dir, 'price_list_with_selling_prices.pdf')
+    user_directory = os.path.join(output_dir, request.user.username)
+    file_path = os.path.join(user_directory, 'price_list_with_selling_prices.pdf')
     if os.path.exists(file_path):
         return FileResponse(open(file_path, 'rb'), content_type='application/pdf')
     else:
         return HttpResponse("File not found", status=404)
 
+
 @csrf_exempt
 def update_csv_view(request):
-    secure_token = 'iRQScq0YJtJxz8HQXYCORsh86OXQJcxt4BEmGXM5CTbM95ys6A'  # Replace with your secure token
+    secure_token = 'iRQScq0YJtJxz8HQXYCORsh86OXQJcxt4BEmGXM5CTbM95ys6A'
     if request.method == 'POST':
         received_token = request.POST.get('token')
 
@@ -741,3 +741,384 @@ def update_csv_view(request):
 @login_required
 def results(request):
     return render(request, 'price_list_app/results.html')
+
+@login_required
+def promotion_results(request):
+    return render(request, 'price_list_app/promotion_results.html')
+
+@login_required
+def generate_promotion_pricelist(request):
+    try:
+        # Load the necessary data from the database
+        promotions = Promotion.objects.all()
+        promotion_dict = {promo.product_name: promo.selling_price for promo in promotions}
+
+        df = read_csv()
+
+        # Filter the DataFrame to include only products in the Promotion model
+        df = df[df['product_name'].isin(promotion_dict.keys())]
+
+        # Adding the Promotion Price to the DataFrame
+        df['Price'] = df['product_name'].map(promotion_dict)
+
+        availability_column = 'available_cz'
+        df = df[df[availability_column] > 0]
+
+        grouped_df = df.groupby(['Group', 'brand', 'product_name'], as_index=False).agg({
+            'available_cz': 'sum',
+            'Price': 'max',
+            'delivery_month': 'first',
+            'delivery_cw': 'first',
+            'panel_power': 'first',
+            'panel_colour': 'first',
+            'panel_design': 'first',
+            'length': 'first',
+            'width': 'first',
+            'height': 'first',
+            'pcs_pal': 'first',
+            'pcs_ctn': 'first'
+        })
+
+        grouped_df = grouped_df[grouped_df[availability_column] > 0]
+        custom_order = list(get_mappings()[0].values())
+        grouped_df['Group'] = pd.Categorical(grouped_df['Group'], categories=custom_order, ordered=True)
+        grouped_df = grouped_df.sort_values('Group').reset_index(drop=True)
+
+        final_columns = [
+            'Group', 'brand', 'product_name', 'available_cz', 'delivery_month', 'delivery_cw',
+            'panel_power', 'panel_colour', 'panel_design', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn', 'Price'
+        ]
+
+        final_df = grouped_df[final_columns]
+        final_df = final_df.astype(str)
+        empty_values = ['0', 'NaN', 'None', 'NULL', 'nan', '0.0']
+        final_df.replace(empty_values, "", inplace=True)
+
+        nomenclature_mapping, panel_mapping = get_mappings()
+
+        column_rename_dict = {
+            'Group': 'Product Group',
+            'brand': 'Brand',
+            'product_name': 'Product Name',
+            'available_cz': 'Available',
+            'delivery_month': 'Delivery',
+            'delivery_cw': 'CW',
+            'panel_power': 'Power(W)',
+            'panel_colour': 'Colour',
+            'panel_design': 'Design',
+            'length': 'Length',
+            'width': 'Width',
+            'height': 'Height',
+            'pcs_pal': 'Pcs Pal',
+            'pcs_ctn': 'Pcs ctn',
+            'Price': 'Price'
+        }
+
+        final_df.rename(columns=column_rename_dict, inplace=True)
+
+        def format_numbers(value):
+            try:
+                if float(value).is_integer():
+                    return "{:,.0f}".format(float(value)).replace(",", " ")
+                else:
+                    return "{:,.3f}".format(float(value)).replace(",", " ")
+            except ValueError:
+                return str(value)
+
+        final_df = final_df.applymap(format_numbers)
+
+        logo_dict = load_logos()
+
+        class PDF(FPDF):
+            def __init__(self, orientation='P'):
+                super().__init__(orientation)
+                self.orientation = orientation
+                self.toc = []
+
+            def header(self):
+                self.set_font('DejaVu', 'B', 10)
+                self.cell(0, 10, 'Price List', 0, 1, 'C')
+
+            #def footer(self):
+            #    self.set_y(-15)
+            #    self.set_font('DejaVu', 'I', 8)
+            #    self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+            def chapter_title(self, title, group=False):
+                if self.get_y() > self.h - 70:
+                    self.add_page()
+                self.set_font('DejaVu', 'B', 10)
+                self.cell(0, 10, title, 0, 1, 'L')
+                self.ln(2)
+                link = self.add_link()
+                self.set_link(link, page=self.page_no())
+                if group:
+                    self.toc.append((title, self.page_no(), link))
+                else:
+                    self.toc.append((f"{self.current_group}: {title}", self.page_no(), link))
+
+            def chapter_body(self, body):
+                self.set_font('DejaVu', '', 8)
+                self.multi_cell(0, 10, body)
+                self.ln()
+
+            def add_banner(self, logo_filename, height=20):
+                if logo_filename in logo_dict:
+                    logo_path = logo_dict[logo_filename]
+                    if os.path.isfile(logo_path):
+                        logo_path = convert_to_non_interlaced(logo_path)
+                        self.image(logo_path, x=12, y=self.get_y(), h=height)
+                else:
+                    logo_path = logo_dict["NANOSUN"]
+                    if os.path.isfile(logo_path):
+                        logo_path = convert_to_non_interlaced(logo_path)
+                        self.image(logo_path, x=12, y=self.get_y(), h=height)
+                self.ln(height)
+
+            def add_table(self, dataframe, group):
+                dataframe = dataframe.drop(columns=['Product Group', 'Brand'], errors='ignore')
+                dataframe = dataframe.loc[:, ~(dataframe == "").all()]
+                dataframe_copy = dataframe.copy()
+                dataframe_copy.rename(columns={'Price': 'Price'}, inplace=True)
+
+                self.set_font('DejaVu', 'B', 7)
+                headers_list = dataframe_copy.columns.tolist()
+                page_width = self.w - 2 * self.l_margin
+                cell_widths = {}
+                for header in headers_list:
+                    max_content_width = max(self.get_string_width(str(value)) for value in dataframe_copy[header]) + 4
+                    header_width = self.get_string_width(header.replace('_', ' ').title()) + 4
+                    cell_widths[header] = max(max_content_width, header_width)
+                if "Product Name" in cell_widths:
+                    cell_widths["Product Name"] += 0.5 * self.get_string_width(' ')
+                    cell_widths["Product Name"] += self.get_string_width(' ' * 3)
+                total_width = sum(cell_widths.values())
+                scale = page_width / total_width
+                for header in cell_widths:
+                    cell_widths[header] *= scale
+
+                def split_text(text, cell_width, max_lines=2):
+                    words = text.split(' ')
+                    lines = []
+                    current_line = words[0]
+                    for word in words[1:]:
+                        if self.get_string_width(current_line + ' ' + word) <= cell_width - 4:
+                            current_line += ' ' + word
+                        else:
+                            lines.append(current_line)
+                            current_line = word
+                        if len(lines) >= max_lines - 1:
+                            break
+                    lines.append(current_line)
+                    if len(lines) > max_lines:
+                        lines = lines[:max_lines]
+                    return lines
+
+                max_lines = 2
+                header_lines_dict = {}
+                for header in headers_list:
+                    header_lines = split_text(header.replace('_', ' ').title(), cell_widths[header], max_lines=max_lines)
+                    header_lines_dict[header] = header_lines
+                    max_lines = max(max_lines, len(header_lines))
+
+                line_height = 5
+                header_height = max_lines * line_height
+                for header in headers_list:
+                    if len(header_lines_dict[header]) > 1:
+                        cell_widths[header] *= 0.8
+                total_width = sum(cell_widths.values())
+                scale = page_width / total_width
+                for header in cell_widths:
+                    cell_widths[header] *= scale
+
+                def draw_headers():
+                    y_start = self.get_y()
+                    for header in headers_list:
+                        x_start = self.get_x()
+                        for i, line in enumerate(header_lines_dict[header]):
+                            self.set_xy(x_start, y_start + i * line_height)
+                            self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
+                        self.set_xy(x_start + cell_widths[header], y_start)
+                    self.set_y(y_start + header_height)
+                    self.set_y(y_start)
+                    x_start = self.l_margin
+                    for header in headers_list:
+                        self.set_xy(x_start, y_start)
+                        self.multi_cell(cell_widths[header], header_height, '', 1, 'C')
+                        x_start += cell_widths[header]
+
+                draw_headers()
+
+                self.set_font('DejaVu', '', 7)
+                for row in dataframe_copy.itertuples(index=False):
+                    row_lines_dict = {}
+                    max_row_lines = 1
+                    for header in headers_list:
+                        cell_text = str(row[headers_list.index(header)])
+                        if header in ["Colour", "Product Name", "Design"]:
+                            row_lines = split_text(cell_text, cell_widths[header], max_lines=2)
+                        else:
+                            row_lines = [cell_text]
+                        row_lines_dict[header] = row_lines
+                        max_row_lines = max(max_row_lines, len(row_lines))
+
+                    row_height = max_row_lines * line_height
+                    y_start = self.get_y()
+                    if y_start + row_height > self.page_break_trigger:
+                        self.add_page()
+                        draw_headers()
+                        y_start = self.get_y()
+                    for header in headers_list:
+                        x_start = self.get_x()
+                        for i, line in enumerate(row_lines_dict[header]):
+                            self.set_xy(x_start, y_start + i * line_height)
+                            self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
+                        self.set_xy(x_start + cell_widths[header], y_start)
+
+                    self.set_y(y_start + row_height)
+                    self.set_y(y_start)
+                    x_start = self.l_margin
+                    for header in headers_list:
+                        self.set_xy(x_start, y_start)
+                        self.multi_cell(cell_widths[header], row_height, '', 1, 'C')
+                        x_start += cell_widths[header]
+
+            def add_toc_page(self):
+                max_pages = 2
+                initial_font_size = 10
+                data = self._prepare_data()
+                row_height = 6
+
+                while True:
+                    self.set_auto_page_break(auto=True, margin=15)
+                    self.add_page()
+                    self._render_toc(data, initial_font_size, row_height)
+                    pages_used = self.page_no()
+                    if pages_used <= max_pages:
+                        break
+                    initial_font_size -= 0.5
+                    row_height -= 0.2
+                    self._reset_document()
+                self.output(os.path.join(output_dir, 'table_of_contents.pdf'))
+
+            def _prepare_data(self):
+                data = []
+                temp_title = ""
+                for title, page, link in self.toc:
+                    if ": " in title:
+                        group, brand = title.split(": ", 1)
+                        data.append([temp_title, brand, page])
+                        temp_title = ""
+                    else:
+                        temp_title = title
+                return data
+
+            def _render_toc(self, data, font_size, row_height):
+                self.set_font('DejaVu', 'B', font_size)
+                self.cell(0, 8, 'Table of Contents', 0, 1, 'C')
+                self.ln(1)
+                self.set_font('DejaVu', '', font_size - 2)
+                col_width = (self.w - 2 * self.l_margin) / 3
+                for i, row in enumerate(data):
+                    self.set_text_color(0, 0, 0)
+                    self.set_font('DejaVu', 'B', font_size - 2)
+                    self.cell(col_width, row_height, str(row[0]), 0, 0, 'L')
+                    x_chapter_end = self.get_x()
+                    self.cell(col_width, row_height, str(row[1]), 0, 0, 'L')
+                    x_brand_end = self.get_x()
+                    self.cell(col_width, row_height, str(row[2]), 0, 0, 'R')
+                    x_page_end = self.get_x()
+                    y = self.get_y() + row_height
+                    self._draw_dashed_line(x_chapter_end, y, x_brand_end - x_chapter_end, row_height)
+                    self._draw_dashed_line(x_brand_end, y, x_page_end - x_brand_end, row_height)
+                    self.ln(row_height)
+                self.ln(2)
+
+            def _draw_dashed_line(self, x, y, width, height, dash_length=2):
+                self.set_draw_color(0, 0, 0)
+                self.set_line_width(0.2)
+                x_start = x
+                x_end = x + width
+                while x_start < x_end:
+                    self.line(x_start, y, x_start + dash_length, y)
+                    x_start += dash_length * 2
+
+            def _reset_document(self):
+                self.pages = []
+                self.page_no_ = 0
+                self.num_pages = 0
+                self._outlines = []
+                self._current_page = None
+                self.add_page()
+
+        pdf = PDF(orientation='L')
+        pdf.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
+        pdf.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
+        pdf.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
+
+        if 'Product Group' in final_df.columns:
+            for group, group_df in final_df.groupby('Product Group', sort=False):
+                pdf.add_page()
+                pdf.current_group = group
+                pdf.chapter_title(f"{group} Products", group=True)
+                for brand, brand_df in group_df.groupby('Brand'):
+                    pdf.chapter_title(brand)
+                    pdf.add_banner(brand)
+                    pdf.ln(5)
+                    pdf.add_table(brand_df, group)
+                    pdf.ln(10)
+
+        content_pdf_output = os.path.join(output_dir, 'content.pdf')
+        pdf.output(content_pdf_output)
+
+        toc_temp = PDF(orientation='L')
+        toc_temp.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
+        toc_temp.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
+        toc_temp.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
+        toc_temp.toc = pdf.toc
+        toc_temp.add_toc_page()
+
+        toc_temp_output = os.path.join(output_dir, 'toc_temp.pdf')
+        toc_temp.output(toc_temp_output)
+
+        toc_temp_reader = PdfReader(toc_temp_output)
+        toc_pages_count = len(toc_temp_reader.pages)
+
+        adjusted_toc = [(title, page + toc_pages_count, link) for title, page, link in pdf.toc]
+
+        final_toc = PDF(orientation='L')
+        final_toc.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
+        final_toc.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
+        final_toc.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
+        final_toc.toc = adjusted_toc
+        final_toc.add_toc_page()
+
+        final_toc_output = os.path.join(output_dir, 'final_toc.pdf')
+        final_toc.output(final_toc_output)
+
+        final_toc_reader = PdfReader(final_toc_output)
+        content_pdf_reader = PdfReader(content_pdf_output)
+        final_pdf_writer = PdfWriter()
+
+        for page_num in range(len(final_toc_reader.pages)):
+            final_pdf_writer.add_page(final_toc_reader.pages[page_num])
+
+        for page_num in range(len(content_pdf_reader.pages)):
+            final_pdf_writer.add_page(content_pdf_reader.pages[page_num])
+
+        final_output = os.path.join(output_dir, 'price_list_with_selling_prices.pdf')
+        with open(final_output, 'wb') as f:
+            final_pdf_writer.write(f)
+
+        os.remove(content_pdf_output)
+        os.remove(toc_temp_output)
+        os.remove(final_toc_output)
+
+        excel_output = os.path.join(output_dir, 'price_list_with_selling_prices.xlsx')
+        final_df.to_excel(excel_output, index=False)
+
+        return redirect('promotion_results')
+
+    except Exception as e:
+        logger.error(f"Error generating promotion pricelist: {e}")
+        return HttpResponse(f"Error generating promotion pricelist: {e}", status=500)
