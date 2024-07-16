@@ -9,7 +9,7 @@ from django.contrib.auth import logout, login
 from django.contrib.auth.forms import AuthenticationForm
 from django.conf import settings
 from .forms import SelectionForm, CoefficientForm
-from .models import Configuration, NomenclatureMapping, PanelMapping, Logo, PriceLabel, Brand, Promotion
+from .models import Configuration, NomenclatureMapping, PanelMapping, Logo, PriceLabel, Brand, Promotion, BackgroundImage
 from fpdf import FPDF
 from PyPDF2 import PdfReader, PdfWriter
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden
@@ -33,7 +33,6 @@ numeric_columns = [
     'available', 'available_cz', 'bp_eur', 'bp_eur_cz',
     'panel_power', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn'
 ]
-
 
 def get_pricelabel_headers():
     headers = {}
@@ -59,7 +58,6 @@ def get_pricelabel_headers():
     headers['Other'] = other_headers  # Ensure 'Other' group is always included
     return headers
 
-
 def get_mappings():
     nomenclature_mapping = {
         item.key: item.value for item in NomenclatureMapping.objects.all()
@@ -74,10 +72,8 @@ def read_csv():
     for col in numeric_columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df[numeric_columns] = df[numeric_columns].fillna(0)
-    nomenclature_mapping, panel_mapping = get_mappings()
+    nomenclature_mapping, _ = get_mappings()
     df['Group'] = df['nomenclature_group'].apply(lambda x: nomenclature_mapping.get(x[:3], 'Unknown'))
-    df['panel_colour'] = df['panel_colour'].map(panel_mapping)
-    df['panel_design'] = df['panel_design'].map(panel_mapping)
     return df
 
 def home(request):
@@ -97,8 +93,6 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('home')
-
-
 
 @login_required
 def select_products(request):
@@ -124,12 +118,31 @@ def select_products(request):
                 selected_groups = list(form.cleaned_data['groups'].values_list('value', flat=True))
                 warehouse = form.cleaned_data['warehouse']
                 num_prices = form.cleaned_data['num_prices']
+                selected_columns = form.cleaned_data['selected_columns']
                 select_all_brands = form.cleaned_data.get('select_all_brands', False)
 
                 if select_all_brands:
                     selected_brands = []  # Store an empty list as we will handle this dynamically
                 else:
                     selected_brands = list(form.cleaned_data['brands'].values_list('name', flat=True))
+
+                filters = {
+                    'delivery_month_start': form.cleaned_data['delivery_month_start'].strftime('%Y-%m') if form.cleaned_data['delivery_month_start'] else None,
+                    'delivery_month_end': form.cleaned_data['delivery_month_end'].strftime('%Y-%m') if form.cleaned_data['delivery_month_end'] else None,
+                    'panel_power_min': form.cleaned_data['panel_power_min'],
+                    'panel_power_max': form.cleaned_data['panel_power_max'],
+                    'panel_colour': list(form.cleaned_data['panel_colour'].values_list('name', flat=True)) if form.cleaned_data['panel_colour'] else [],
+                    'panel_design': list(form.cleaned_data['panel_design'].values_list('name', flat=True)) if form.cleaned_data['panel_design'] else [],
+                    'length_min': form.cleaned_data['length_min'],
+                    'length_max': form.cleaned_data['length_max'],
+                    'height_min': form.cleaned_data['height_min'],
+                    'height_max': form.cleaned_data['height_max'],
+                    'width_min': form.cleaned_data['width_min'],
+                    'width_max': form.cleaned_data['width_max'],
+                    'available': form.cleaned_data['available'],
+                    'power_available': form.cleaned_data['power_available'],
+                    'length_height_limit': form.cleaned_data['length_height_limit'],
+                }
 
                 config_name = f"Configuration {datetime.now().strftime('%Y%m%d%H%M%S')}"
                 config = Configuration.objects.create(
@@ -140,13 +153,14 @@ def select_products(request):
                     warehouse=warehouse,
                     num_prices=num_prices,
                     coefficients=json.dumps({}),
-                    select_all_brands=select_all_brands  # Save the select_all_brands flag
+                    select_all_brands=select_all_brands,
+                    filters=json.dumps(filters),
+                    selected_columns=json.dumps(selected_columns)
                 )
                 return redirect('input_coefficients', config_id=config.id)
     else:
         form = SelectionForm(user=request.user)
     return render(request, 'price_list_app/select_products.html', {'form': form})
-
 
 @login_required
 def input_coefficients(request, config_id):
@@ -263,6 +277,7 @@ def generate_files(request, config_id):
     warehouse = config.warehouse
     num_prices = config.num_prices
     coefficients = json.loads(config.coefficients)
+    filters = json.loads(config.filters)
 
     # Handle dynamic selection of brands
     if config.select_all_brands:
@@ -273,6 +288,55 @@ def generate_files(request, config_id):
     df = read_csv()
     df = df[df['Group'].isin(selected_groups)]
     df = df[df['brand'].isin(selected_brands)]
+
+
+    # Apply filters
+    if filters.get('no_delivery_date'):
+        df = df[df['delivery_month'].isnull()]
+    else:
+        df['delivery_month'] = pd.to_datetime(df['delivery_month']).dt.strftime('%Y-%m')
+        if filters.get('delivery_month_start'):
+            df = df[df['delivery_month'] >= filters['delivery_month_start']]
+        if filters.get('delivery_month_end'):
+            df = df[df['delivery_month'] <= filters['delivery_month_end']]
+    if filters.get('panel_power_min') is not None:
+        df = df[df['panel_power'] >= filters['panel_power_min']]
+    if filters.get('panel_power_max') is not None:
+        df = df[df['panel_power'] <= filters['panel_power_max']]
+    if filters.get('panel_colour'):
+        df = df[df['panel_colour'].isin(filters['panel_colour'])]
+    if filters.get('panel_design'):
+        df = df[df['panel_design'].isin(filters['panel_design'])]
+    if filters.get('length_min') is not None:
+        df = df[df['length'] >= filters['length_min']]
+    if filters.get('length_max') is not None:
+        df = df[df['length'] <= filters['length_max']]
+    if filters.get('height_min') is not None:
+        df = df[df['height'] >= filters['height_min']]
+    if filters.get('height_max') is not None:
+        df = df[df['height'] <= filters['height_max']]
+    if filters.get('width_min') is not None:
+        df = df[df['width'] >= filters['width_min']]
+    if filters.get('width_max') is not None:
+        df = df[df['width'] <= filters['width_max']]
+    if filters.get('available') is not None:
+        df = df[df['available'] >= filters['available']]
+    if filters.get('power_available') is not None:
+        df['power_available'] = df['available'] * df['panel_power']
+        df = df[df['power_available'] >= filters['power_available']]
+    if filters.get('length_height_limit'):
+        def product_of_two_largest(row):
+            largest_two = sorted([row['length'], row['height'], row['width']], reverse=True)[:2]
+            return largest_two[0]/1000 * largest_two[1]/1000
+
+        df['product_of_two_largest'] = df.apply(product_of_two_largest, axis=1)
+        df = df[df['product_of_two_largest'] <= 2]
+        df = df.drop(columns=['product_of_two_largest'])
+
+
+    _, panel_mapping = get_mappings()
+    df['panel_colour'] = df['panel_colour'].map(panel_mapping)
+    df['panel_design'] = df['panel_design'].map(panel_mapping)
 
     def calculate_selling_price(bp_price, operation, coefficient):
         if operation == "*":
@@ -292,12 +356,11 @@ def generate_files(request, config_id):
         return row
 
     if warehouse == 'Decin':
-        availability_column = 'available_cz'
+        df['available'] = df['available_cz']
     else:
-        df['custom_available'] = df['available'] - df['available_cz']
-        availability_column = 'custom_available'
+        df['available'] = df['available'] - df['available_cz']
 
-    df = df[df[availability_column] > 0]
+    df = df[df['available'] > 0]
     df = df.apply(apply_coefficients, axis=1)
 
     for j in range(1, num_prices + 1):
@@ -305,9 +368,8 @@ def generate_files(request, config_id):
         if price_col not in df.columns:
             df[price_col] = 0
 
-
     grouped_df = df.groupby(['Group', 'brand', 'product_name'], as_index=False).agg({
-        availability_column: 'sum',
+        'available': 'sum',
         'bp_eur': 'max',
         **{f'price_label_{j}': 'max' for j in range(1, num_prices + 1)},
         'delivery_month': 'first',
@@ -322,7 +384,7 @@ def generate_files(request, config_id):
         'pcs_ctn': 'first'
     })
 
-    grouped_df = grouped_df[grouped_df[availability_column] > 0]
+    grouped_df = grouped_df[grouped_df['available'] > 0]
     custom_order = list(get_mappings()[0].values())
     grouped_df['Group'] = pd.Categorical(grouped_df['Group'], categories=custom_order, ordered=True)
     grouped_df = grouped_df.sort_values('Group').reset_index(drop=True)
@@ -335,23 +397,18 @@ def generate_files(request, config_id):
     if 'Other' not in headers:
         headers['Other'] = get_pricelabel_headers().get('Other', {})
 
-    final_columns = [
-        'Group', 'brand', 'product_name', availability_column, 'delivery_month', 'delivery_cw',
-        'panel_power', 'panel_colour', 'panel_design', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn',
-        *[f'price_label_{j}' for j in range(1, num_prices + 1)]
-    ]
+    selected_columns = json.loads(config.selected_columns)
+    final_columns = ['Group', 'brand', 'product_name'] + selected_columns + [f'price_label_{j}' for j in range(1, num_prices + 1)]
     final_df = grouped_df[final_columns]
     final_df = final_df.astype(str)
     empty_values = ['0', 'NaN', 'None', 'NULL', 'nan', '0.0']
     final_df.replace(empty_values, "", inplace=True)
 
-    nomenclature_mapping, panel_mapping = get_mappings()
-
     column_rename_dict = {
         'Group': 'Product Group',
         'brand': 'Brand',
         'product_name': 'Product Name',
-        availability_column: 'Available',
+        'available': 'Available',
         'delivery_month': 'Delivery',
         'delivery_cw': 'CW',
         'panel_power': 'Power(W)',
@@ -380,19 +437,17 @@ def generate_files(request, config_id):
     logo_dict = load_logos()
 
     class PDF(FPDF):
-        def __init__(self, orientation='P'):
+        def __init__(self, orientation='P', background_image=None):
             super().__init__(orientation)
-            self.orientation = orientation
+            self.background_image = background_image
             self.toc = []
 
         def header(self):
+            if self.background_image:
+                self.image(self.background_image, x=0, y=0, w=self.w, h=self.h)
             self.set_font('DejaVu', 'B', 10)
             self.cell(0, 10, 'Price List', 0, 1, 'C')
 
-        #def footer(self):
-        #    self.set_y(-15)
-        #    self.set_font('DejaVu', 'I', 8)
-        #    self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
 
         def chapter_title(self, title, group=False):
             if self.get_y() > self.h - 70:
@@ -427,6 +482,7 @@ def generate_files(request, config_id):
 
         def add_table(self, dataframe, group, headers):
             dataframe = dataframe.drop(columns=['Product Group', 'Brand'], errors='ignore')
+
             dataframe = dataframe.loc[:, ~(dataframe == "").all()]
             dataframe_copy = dataframe.copy()
             for col in dataframe.columns:
@@ -603,7 +659,20 @@ def generate_files(request, config_id):
             self._current_page = None
             self.add_page()
 
-    pdf = PDF(orientation='L')
+    if filters.get('NoBackground'):
+        try:
+            background_image = BackgroundImage.objects.first()
+            toc_image = background_image.toc_image.path if background_image else None
+            content_image = background_image.content_image.path if background_image else None
+        except AttributeError:
+            toc_image = None
+            content_image = None
+    else :
+        toc_image = None
+        content_image = None
+
+    # Create PDF for content with content background image
+    pdf = PDF(orientation='L', background_image=content_image)
     pdf.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
     pdf.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
     pdf.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
@@ -638,7 +707,7 @@ def generate_files(request, config_id):
 
     adjusted_toc = [(title, page + toc_pages_count, link) for title, page, link in pdf.toc]
 
-    final_toc = PDF(orientation='L')
+    final_toc = PDF(orientation='L', background_image=toc_image)
     final_toc.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
     final_toc.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
     final_toc.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
@@ -701,7 +770,6 @@ def download_excel_promotion(request):
         return FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, filename='price_list_with_selling_prices.xlsx')
     return redirect('promotion_results')
 
-
 @login_required
 def view_pdf(request):
     user_directory = os.path.join(output_dir, request.user.username)
@@ -710,7 +778,6 @@ def view_pdf(request):
         return FileResponse(open(file_path, 'rb'), content_type='application/pdf')
     else:
         return HttpResponse("File not found", status=404)
-
 
 @csrf_exempt
 def update_csv_view(request):
@@ -794,8 +861,6 @@ def generate_promotion_pricelist(request):
         empty_values = ['0', 'NaN', 'None', 'NULL', 'nan', '0.0']
         final_df.replace(empty_values, "", inplace=True)
 
-        nomenclature_mapping, panel_mapping = get_mappings()
-
         column_rename_dict = {
             'Group': 'Product Group',
             'brand': 'Brand',
@@ -828,21 +893,18 @@ def generate_promotion_pricelist(request):
         final_df = final_df.applymap(format_numbers)
 
         logo_dict = load_logos()
-
         class PDF(FPDF):
-            def __init__(self, orientation='P'):
+            def __init__(self, orientation='P', background_image=None):
                 super().__init__(orientation)
-                self.orientation = orientation
+                self.background_image = background_image
                 self.toc = []
 
             def header(self):
+                if self.background_image:
+                    self.image(self.background_image, x=0, y=0, w=self.w, h=self.h)
                 self.set_font('DejaVu', 'B', 10)
                 self.cell(0, 10, 'Price List', 0, 1, 'C')
 
-            #def footer(self):
-            #    self.set_y(-15)
-            #    self.set_font('DejaVu', 'I', 8)
-            #    self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
 
             def chapter_title(self, title, group=False):
                 if self.get_y() > self.h - 70:
@@ -1051,7 +1113,15 @@ def generate_promotion_pricelist(request):
                 self._current_page = None
                 self.add_page()
 
-        pdf = PDF(orientation='L')
+        try:
+            background_image = BackgroundImage.objects.first()
+            toc_image = background_image.toc_image.path if background_image else None
+            content_image = background_image.content_image.path if background_image else None
+        except AttributeError:
+            toc_image = None
+            content_image = None
+
+        pdf = PDF(orientation='L', background_image=content_image)
         pdf.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
         pdf.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
         pdf.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
@@ -1086,7 +1156,7 @@ def generate_promotion_pricelist(request):
 
         adjusted_toc = [(title, page + toc_pages_count, link) for title, page, link in pdf.toc]
 
-        final_toc = PDF(orientation='L')
+        final_toc = PDF(orientation='L', background_image=toc_image)
         final_toc.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
         final_toc.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
         final_toc.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)

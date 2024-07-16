@@ -12,10 +12,30 @@ class Configuration(models.Model):
     updated = models.DateTimeField(auto_now=True, null=True)
     selected_brands = models.JSONField(default=list)
     select_all_brands = models.BooleanField(default=False)
-
+    filters = models.JSONField(null=True, blank=True)
+    selected_columns = models.JSONField(default=list)
     def __str__(self):
         return f"{self.name} ({self.user.username}: {self.warehouse}, {self.num_prices} Prices)"
 
+class BackgroundImage(models.Model):
+    name = models.CharField(max_length=100)
+    toc_image = models.ImageField(upload_to='backgrounds/toc/', default='backgrounds/default_toc.jpg')
+    content_image = models.ImageField(upload_to='backgrounds/content/', default='backgrounds/default_content.jpg')
+
+    def __str__(self):
+        return self.name
+
+class PanelColour(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class PanelDesign(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
 
 class NomenclatureMapping(models.Model):
     key = models.CharField(max_length=10, unique=True)

@@ -1,13 +1,15 @@
 from django.contrib import admin
-from .models import NomenclatureMapping, PanelMapping, Configuration, Brand, Logo, PriceLabel, Promotion
+from .models import NomenclatureMapping, PanelMapping, Configuration, Brand, Logo, PriceLabel, Promotion, PanelColour, PanelDesign, BackgroundImage
 from django import forms
 from jsoneditor.forms import JSONEditor
-
+from .models import BackgroundImage
 
 admin.site.register(NomenclatureMapping)
 admin.site.register(PanelMapping)
 admin.site.register(Brand)
 admin.site.register(Promotion)
+admin.site.register(PanelColour)
+admin.site.register(PanelDesign)
 
 class ConfigurationAdminForm(forms.ModelForm):
     class Meta:
@@ -16,6 +18,10 @@ class ConfigurationAdminForm(forms.ModelForm):
         widgets = {
             'coefficients': JSONEditor(attrs={'style': 'width: 800px;'}),
         }
+
+@admin.register(BackgroundImage)
+class BackgroundImageAdmin(admin.ModelAdmin):
+    list_display = ('name', 'toc_image', 'content_image')
 
 @admin.register(Configuration)
 class ConfigurationAdmin(admin.ModelAdmin):

@@ -76,15 +76,270 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="accordion" id="accordionFormSections">
+                            <!-- Delivery Month -->
+                            <div class="card">
+                                <div class="card-header" id="headingDeliveryMonth">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapseDeliveryMonth" aria-expanded="true" aria-controls="collapseDeliveryMonth">
+                                            Delivery Month
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseDeliveryMonth" class="collapse" aria-labelledby="headingDeliveryMonth" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_delivery_month_start">Delivery Month:</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label>Minimum</label>
+                                                    {{ form.delivery_month_start }}
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label>Maximum</label>
+                                                    {{ form.delivery_month_end }}
+                                                </div>
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                {{ form.no_delivery_date }} <label for="id_no_delivery_date">No Delivery Date</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Panel Power -->
+                            <div class="card">
+                                <div class="card-header" id="headingPanelPower">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapsePanelPower" aria-expanded="false" aria-controls="collapsePanelPower">
+                                            Panel Power (W)
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapsePanelPower" class="collapse" aria-labelledby="headingPanelPower" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_panel_power_min">Power (W):</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label>Minimum</label>
+                                                    {{ form.panel_power_min }}
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label>Maximum</label>
+                                                    {{ form.panel_power_max }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Panel Colour -->
+                            <div class="card">
+                                <div class="card-header" id="headingPanelColour">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapsePanelColour" aria-expanded="false" aria-controls="collapsePanelColour">
+                                            Panel Colour
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapsePanelColour" class="collapse" aria-labelledby="headingPanelColour" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_panel_colour">Panel Colour:</label>
+                                            <div class="form-check">
+                                                {% for checkbox in form.panel_colour %}
+                                                <div class="form-check large-checkbox">
+                                                    <label class="form-check-label large-checkbox-label">
+                                                        {{ checkbox.tag }} {{ checkbox.choice_label }}
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Panel Design -->
+                            <div class="card">
+                                <div class="card-header" id="headingPanelDesign">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapsePanelDesign" aria-expanded="false" aria-controls="collapsePanelDesign">
+                                            Panel Design
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapsePanelDesign" class="collapse" aria-labelledby="headingPanelDesign" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_panel_design">Panel Design:</label>
+                                            <div class="form-check">
+                                                {% for checkbox in form.panel_design %}
+                                                <div class="form-check large-checkbox">
+                                                    <label class="form-check-label large-checkbox-label">
+                                                        {{ checkbox.tag }} {{ checkbox.choice_label }}
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Length -->
+                            <div class="card">
+                                <div class="card-header" id="headingLength">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseLength" aria-expanded="false" aria-controls="collapseLength">
+                                            Length (mm)
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseLength" class="collapse" aria-labelledby="headingLength" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_length_min">Length (mm):</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label>Minimum</label>
+                                                    {{ form.length_min }}
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label>Maximum</label>
+                                                    {{ form.length_max }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Height -->
+                            <div class="card">
+                                <div class="card-header" id="headingHeight">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseHeight" aria-expanded="false" aria-controls="collapseHeight">
+                                            Height (mm)
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseHeight" class="collapse" aria-labelledby="headingHeight" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_height_min">Height (mm):</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label>Minimum</label>
+                                                    {{ form.height_min }}
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label>Maximum</label>
+                                                    {{ form.height_max }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Width -->
+                            <div class="card">
+                                <div class="card-header" id="headingWidth">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseWidth" aria-expanded="false" aria-controls="collapseWidth">
+                                            Width (mm)
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseWidth" class="collapse" aria-labelledby="headingWidth" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_width_min">Width (mm):</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label>Minimum</label>
+                                                    {{ form.width_min }}
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label>Maximum</label>
+                                                    {{ form.width_max }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Custom Filters -->
+                            <div class="card">
+                                <div class="card-header" id="headingCustomFilters">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseCustomFilters" aria-expanded="false" aria-controls="collapseCustomFilters">
+                                            Custom Filters
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseCustomFilters" class="collapse" aria-labelledby="headingCustomFilters" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_available">Available Pcs superior to:</label>
+                                            {{ form.available }}
+                                        </div>
+                                        <div class="form-group mb-3">
+                                            <label for="id_power_available">Power Available (W) superior to:</label>
+                                            {{ form.power_available }}
+                                        </div>
+                                        <div class="form-check mb-3">
+                                            {{ form.length_height_limit }} <label for="id_length_height_limit">Length * Height <= 2000</label>
+                                        </div>
+                                        <div class="form-check mb-3">
+                                            {{ form.NoBackground }} <label for="NoBackground">Disable Background</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Selected Columns -->
+                            <div class="card">
+                                <div class="card-header" id="headingSelectedColumns">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseSelectedColumns" aria-expanded="false" aria-controls="collapseSelectedColumns">
+                                            Select Columns to Display
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseSelectedColumns" class="collapse" aria-labelledby="headingSelectedColumns" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_selected_columns">Select Columns to Display:</label>
+                                            <div class="form-check">
+                                                {% for checkbox in form.selected_columns %}
+                                                <div class="form-check large-checkbox">
+                                                    <label class="form-check-label large-checkbox-label">
+                                                        {{ checkbox.tag }} {{ checkbox.choice_label }}
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
                         <div class="form-group row mt-3 mb-3">
                             <div class="col-sm-9 offset-sm-3">
-                                <button type="submit" class="btn btn-primary1">Next</button>
-                                <form method="post">
-                                    {% csrf_token %}
-                                    <button type="submit" name="generate_promotion_pricelist" class="btn btn-secondary">Generate Promotion Pricelist</button>
-                                </form>
+                                <button type="submit" class="btn btn-primary1">Generate Pricelist</button>
+                                <button type="submit" name="generate_promotion_pricelist" class="btn btn-secondary">Generate Promotion Pricelist</button>
                             </div>
                         </div>
+
                     </form>
                 </div>
             </div>
@@ -148,6 +403,25 @@
                 checkbox.disabled = true;
             });
         }
+
+        const noDeliveryDateCheckbox = document.getElementById('id_no_delivery_date');
+        const deliveryMonthStartMonth = document.getElementById('id_delivery_month_start_0');
+        const deliveryMonthStartYear = document.getElementById('id_delivery_month_start_1');
+        const deliveryMonthEndMonth = document.getElementById('id_delivery_month_end_0');
+        const deliveryMonthEndYear = document.getElementById('id_delivery_month_end_1');
+
+        function toggleDeliveryMonthFields() {
+            const disabled = noDeliveryDateCheckbox.checked;
+            deliveryMonthStartMonth.disabled = disabled;
+            deliveryMonthStartYear.disabled = disabled;
+            deliveryMonthEndMonth.disabled = disabled;
+            deliveryMonthEndYear.disabled = disabled;
+        }
+
+        noDeliveryDateCheckbox.addEventListener('change', toggleDeliveryMonthFields);
+
+        // Initialize the fields based on the current state of the checkbox
+        toggleDeliveryMonthFields();
     });
 </script>
 {% endblock %}
