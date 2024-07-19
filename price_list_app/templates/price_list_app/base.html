@@ -59,6 +59,18 @@
         .navbar + .container-fluid {
             margin-top: 80px; /* Increased margin for better spacing */
         }
+        .logout-link {
+            color: #ffffff !important; /* Text color */
+            background-color: #dc3545; /* Background color */
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-align: center;
+            margin-left: 10px; /* Space from the previous link */
+        }
+        .logout-link:hover {
+            background-color: #c82333; /* Hover color */
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -70,9 +82,11 @@
         </button>
         <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
             <div class="navbar-nav ml-auto">
-                <!--<a class="nav-item nav-link" href="{% url 'home' %}">Home</a> -->
                 {% if user.is_authenticated %}
-                    <a class="nav-item nav-link" href="{% url 'logout' %}">Logout</a>
+                    <a class="nav-item nav-link" href="{% url 'home' %}">Home</a>
+                    <a class="nav-item nav-link" href="{% url 'select_products' %}">Custom Pricelist</a>
+                    <a class="nav-item nav-link" href="{% url 'generate_promotion_pricelist' %}">Promotion Pricelist</a>
+                    <a class="nav-item nav-link logout-link" href="{% url 'logout' %}">Logout</a>
                 {% else %}
                     <a class="nav-item nav-link" href="{% url 'social:begin' 'google-oauth2' %}">Login with Google</a>
                 {% endif %}

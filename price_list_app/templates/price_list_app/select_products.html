@@ -274,7 +274,38 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Availability Filters -->
+                            <div class="card">
+                                <div class="card-header" id="headingCustomFilters">
+                                    <h2 class="mb-0">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseCustomFilters" aria-expanded="false" aria-controls="collapseCustomFilters">
+                                            Availability Filters
+                                        </button>
+                                    </h2>
+                                </div>
+                                <div id="collapseCustomFilters" class="collapse" aria-labelledby="headingAvailabilityFilters" data-parent="#accordionFormSections">
+                                    <div class="card-body">
+                                        <div class="form-group mb-3">
+                                            <label for="id_available">Available Pcs superior to:</label>
+                                            {{ form.available }}
+                                        </div>
 
+                                        <div class="form-group mb-3">
+                                            <label for="id_pal_available">Pallet available superior to:</label> {{ form.pal_available }}
+                                        </div>
+
+                                        <div class="form-group mb-3">
+                                            <label for="id_ctn_available">Container available superior to:</label> {{ form.ctn_available }}
+                                        </div>
+
+                                        <div class="form-group mb-3">
+                                            <label for="id_power_available">Power available (kW) superior to:</label>
+                                            {{ form.power_available }}
+                                        </div>
+                                    </div>
+                                    </div>
+                                </div>
+                            </div>
                             <!-- Custom Filters -->
                             <div class="card">
                                 <div class="card-header" id="headingCustomFilters">
@@ -286,23 +317,21 @@
                                 </div>
                                 <div id="collapseCustomFilters" class="collapse" aria-labelledby="headingCustomFilters" data-parent="#accordionFormSections">
                                     <div class="card-body">
-                                        <div class="form-group mb-3">
-                                            <label for="id_available">Available Pcs superior to:</label>
-                                            {{ form.available }}
-                                        </div>
-                                        <div class="form-group mb-3">
-                                            <label for="id_power_available">Power Available (W) superior to:</label>
-                                            {{ form.power_available }}
-                                        </div>
                                         <div class="form-check mb-3">
-                                            {{ form.length_height_limit }} <label for="id_length_height_limit">Length * Height <= 2000</label>
+                                            {{ form.length_height_limit }} <label for="id_length_height_limit">Length * Height <= 2000mm</label>
                                         </div>
+
                                         <div class="form-check mb-3">
-                                            {{ form.NoBackground }} <label for="NoBackground">Disable Background</label>
+                                            {{ form.NoBackground }} <label for="id_NoBackground">Disable Background</label>
                                         </div>
+
+                                        <div class="form-check mb-3">
+                                            {{ form.NoTOC }} <label for="id_NoTOC">Disable Table of content</label>
+                                        </div>
+
+                                    </div>
                                     </div>
                                 </div>
-                            </div>
 
                             <!-- Selected Columns -->
                             <div class="card">
@@ -330,13 +359,13 @@
                                     </div>
                                 </div>
                             </div>
+                            </div>
 
                         </div>
 
                         <div class="form-group row mt-3 mb-3">
                             <div class="col-sm-9 offset-sm-3">
                                 <button type="submit" class="btn btn-primary1">Generate Pricelist</button>
-                                <button type="submit" name="generate_promotion_pricelist" class="btn btn-secondary">Generate Promotion Pricelist</button>
                             </div>
                         </div>
 
@@ -346,6 +375,14 @@
         </div>
     </div>
 </div>
+
+{% if messages %}
+    {% for message in messages %}
+        <script>
+            alert("{{ message }}");
+        </script>
+    {% endfor %}
+{% endif %}
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

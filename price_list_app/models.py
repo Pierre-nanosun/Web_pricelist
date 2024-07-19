@@ -100,4 +100,3 @@ class Promotion(models.Model):
 
     def __str__(self):
         return f"{self.product_name} - {self.selling_price}"
-

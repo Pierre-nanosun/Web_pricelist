@@ -1,7 +1,7 @@
+from fpdf import FPDF
 import os
 import json
 import pandas as pd
-import logging
 from PIL import Image
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -10,20 +10,27 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.conf import settings
 from .forms import SelectionForm, CoefficientForm
 from .models import Configuration, NomenclatureMapping, PanelMapping, Logo, PriceLabel, Brand, Promotion, BackgroundImage
-from fpdf import FPDF
 from PyPDF2 import PdfReader, PdfWriter
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
+from django.contrib import messages
+import logging
+from unidecode import unidecode
 
 logger = logging.getLogger(__name__)
 
 # Constants
 BASE_DIR = settings.BASE_DIR
 csv_file_path = os.path.join(BASE_DIR, 'data', 'data.csv')
+csv_datasheet_file_path = os.path.join(BASE_DIR, 'data', 'datasheet.csv')
 logos_dir = os.path.join(BASE_DIR, 'logos')
 font_dir = os.path.join(BASE_DIR, 'price_list_app', 'static', 'fonts')
 output_dir = os.path.join(BASE_DIR, 'static', 'generated_files')
+
+
+df_links = pd.read_csv(csv_datasheet_file_path)
+product_links = dict(zip(df_links['Product Name'], df_links['link']))
 
 # Ensure the output directory exists
 if not os.path.exists(output_dir):
@@ -110,8 +117,6 @@ def select_products(request):
             config_id = request.POST.get('configurations')
             if config_id:
                 return redirect('generate_files', config_id=config_id)
-        elif 'generate_promotion_pricelist' in request.POST:
-            return redirect('generate_promotion_pricelist')
         else:
             form = SelectionForm(request.POST, user=request.user)
             if form.is_valid():
@@ -141,7 +146,13 @@ def select_products(request):
                     'width_max': form.cleaned_data['width_max'],
                     'available': form.cleaned_data['available'],
                     'power_available': form.cleaned_data['power_available'],
+                    'pal_available' : form.cleaned_data['pal_available'],
+                    'ctn_available' : form.cleaned_data['ctn_available'],
                     'length_height_limit': form.cleaned_data['length_height_limit'],
+                    'no_delivery_date': form.cleaned_data['no_delivery_date'],
+                    'NoBackground': form.cleaned_data['NoBackground'],
+                    'NoTOC': form.cleaned_data['NoTOC'],
+
                 }
 
                 config_name = f"Configuration {datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -158,6 +169,8 @@ def select_products(request):
                     selected_columns=json.dumps(selected_columns)
                 )
                 return redirect('input_coefficients', config_id=config.id)
+            else:
+                messages.error(request, 'Form is invalid. Please correct the errors and try again. [Product type]')
     else:
         form = SelectionForm(user=request.user)
     return render(request, 'price_list_app/select_products.html', {'form': form})
@@ -322,8 +335,16 @@ def generate_files(request, config_id):
     if filters.get('available') is not None:
         df = df[df['available'] >= filters['available']]
     if filters.get('power_available') is not None:
-        df['power_available'] = df['available'] * df['panel_power']
+        df['power_available'] = (df['available'] * df['panel_power']) / 1000
         df = df[df['power_available'] >= filters['power_available']]
+
+    if filters.get('pal_available') is not None:
+        df = df[df['available']/df['pcs_pal']  >= filters['pal_available']]
+
+    if filters.get('ctn_available') is not None:
+        df = df[df['pcs_ctn'] >= 1]
+        df = df[df['available']/df['pcs_ctn'] >= filters['ctn_available']]
+
     if filters.get('length_height_limit'):
         def product_of_two_largest(row):
             largest_two = sorted([row['length'], row['height'], row['width']], reverse=True)[:2]
@@ -343,8 +364,6 @@ def generate_files(request, config_id):
             return bp_price * coefficient
         elif operation == "+":
             return bp_price + coefficient
-        return bp_price
-
     def apply_coefficients(row):
         group = row['Group']
         bp_price = row['bp_eur_cz'] if warehouse == 'Decin' else row['bp_eur']
@@ -352,7 +371,10 @@ def generate_files(request, config_id):
             op = coefficients.get(group, {}).get(f'operation_{j}', '*')
             coeff = coefficients.get(group, {}).get(f'coefficient_{j}', 1.2)
             price = calculate_selling_price(bp_price, op, coeff)
-            row[f'price_label_{j}'] = round(price, 3) if group == 'Panels' else round(price, 0)
+            if group == 'Panels':
+                row[f'price_label_{j}'] = round(price, 4)
+            else:
+                row[f'price_label_{j}'] = round(price, 0)
         return row
 
     if warehouse == 'Decin':
@@ -482,7 +504,6 @@ def generate_files(request, config_id):
 
         def add_table(self, dataframe, group, headers):
             dataframe = dataframe.drop(columns=['Product Group', 'Brand'], errors='ignore')
-
             dataframe = dataframe.loc[:, ~(dataframe == "").all()]
             dataframe_copy = dataframe.copy()
             for col in dataframe.columns:
@@ -580,8 +601,19 @@ def generate_files(request, config_id):
                     x_start = self.get_x()
                     for i, line in enumerate(row_lines_dict[header]):
                         self.set_xy(x_start, y_start + i * line_height)
-                        self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
-                    self.set_xy(x_start + cell_widths[header], y_start)
+                        if header == 'Product Name':
+                            link = product_links.get(line)  # Fetch link from dictionary
+                            if link:
+                                pdf_link = self.add_link()
+                                self.set_link(pdf_link, page=self.page_no(), y=self.get_y())
+                                self.set_text_color(0, 0, 255)
+                                self.cell(cell_widths[header], line_height, line, 0, 0, 'C', link=link)
+                                self.set_text_color(0)
+                            else:
+                                self.cell(cell_widths[header], line_height, line, 0, 0, 'C')  # No link if not found
+                        else:
+                            self.cell(cell_widths[header], line_height, line, 0, 0, 'C')
+                        self.set_xy(x_start + cell_widths[header], y_start)
 
                 self.set_y(y_start + row_height)
                 self.set_y(y_start)
@@ -658,8 +690,10 @@ def generate_files(request, config_id):
             self._outlines = []
             self._current_page = None
             self.add_page()
-
     if filters.get('NoBackground'):
+        toc_image = None
+        content_image = None
+    else:
         try:
             background_image = BackgroundImage.objects.first()
             toc_image = background_image.toc_image.path if background_image else None
@@ -667,9 +701,6 @@ def generate_files(request, config_id):
         except AttributeError:
             toc_image = None
             content_image = None
-    else :
-        toc_image = None
-        content_image = None
 
     # Create PDF for content with content background image
     pdf = PDF(orientation='L', background_image=content_image)
@@ -692,48 +723,51 @@ def generate_files(request, config_id):
     content_pdf_output = os.path.join(user_directory, 'content.pdf')
     pdf.output(content_pdf_output)
 
-    toc_temp = PDF(orientation='L')
-    toc_temp.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
-    toc_temp.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
-    toc_temp.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
-    toc_temp.toc = pdf.toc
-    toc_temp.add_toc_page()
+    if not filters.get('NoTOC'):
+        toc_temp = PDF(orientation='L')
+        toc_temp.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
+        toc_temp.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
+        toc_temp.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
+        toc_temp.toc = pdf.toc
+        toc_temp.add_toc_page()
 
-    toc_temp_output = os.path.join(user_directory, 'toc_temp.pdf')
-    toc_temp.output(toc_temp_output)
+        toc_temp_output = os.path.join(user_directory, 'toc_temp.pdf')
+        toc_temp.output(toc_temp_output)
 
-    toc_temp_reader = PdfReader(toc_temp_output)
-    toc_pages_count = len(toc_temp_reader.pages)
+        toc_temp_reader = PdfReader(toc_temp_output)
+        toc_pages_count = len(toc_temp_reader.pages)
 
-    adjusted_toc = [(title, page + toc_pages_count, link) for title, page, link in pdf.toc]
+        adjusted_toc = [(title, page + toc_pages_count, link) for title, page, link in pdf.toc]
 
-    final_toc = PDF(orientation='L', background_image=toc_image)
-    final_toc.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
-    final_toc.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
-    final_toc.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
-    final_toc.toc = adjusted_toc
-    final_toc.add_toc_page()
+        final_toc = PDF(orientation='L', background_image=toc_image)
+        final_toc.add_font('DejaVu', '', os.path.join(font_dir, 'DejaVuSans.ttf'), uni=True)
+        final_toc.add_font('DejaVu', 'B', os.path.join(font_dir, 'DejaVuSans-Bold.ttf'), uni=True)
+        final_toc.add_font('DejaVu', 'I', os.path.join(font_dir, 'DejaVuSans-Oblique.ttf'), uni=True)
+        final_toc.toc = adjusted_toc
+        final_toc.add_toc_page()
 
-    final_toc_output = os.path.join(user_directory, 'final_toc.pdf')
-    final_toc.output(final_toc_output)
+        final_toc_output = os.path.join(user_directory, 'final_toc.pdf')
+        final_toc.output(final_toc_output)
 
-    final_toc_reader = PdfReader(final_toc_output)
-    content_pdf_reader = PdfReader(content_pdf_output)
-    final_pdf_writer = PdfWriter()
+        final_toc_reader = PdfReader(final_toc_output)
+        final_pdf_writer = PdfWriter()
 
-    for page_num in range(len(final_toc_reader.pages)):
-        final_pdf_writer.add_page(final_toc_reader.pages[page_num])
+        for page_num in range(len(final_toc_reader.pages)):
+            final_pdf_writer.add_page(final_toc_reader.pages[page_num])
 
-    for page_num in range(len(content_pdf_reader.pages)):
-        final_pdf_writer.add_page(content_pdf_reader.pages[page_num])
+        content_pdf_reader = PdfReader(content_pdf_output)
+        for page_num in range(len(content_pdf_reader.pages)):
+            final_pdf_writer.add_page(content_pdf_reader.pages[page_num])
 
-    final_output = os.path.join(user_directory, 'price_list_with_selling_prices.pdf')
-    with open(final_output, 'wb') as f:
-        final_pdf_writer.write(f)
+        final_output = os.path.join(user_directory, 'price_list_with_selling_prices.pdf')
+        with open(final_output, 'wb') as f:
+            final_pdf_writer.write(f)
 
-    os.remove(content_pdf_output)
-    os.remove(toc_temp_output)
-    os.remove(final_toc_output)
+        os.remove(content_pdf_output)
+        os.remove(toc_temp_output)
+        os.remove(final_toc_output)
+    else:
+        os.rename(content_pdf_output, os.path.join(user_directory, 'price_list_with_selling_prices.pdf'))
 
     excel_output = os.path.join(user_directory, 'price_list_with_selling_prices.xlsx')
     final_df.to_excel(excel_output, index=False)
@@ -782,10 +816,16 @@ def view_pdf(request):
 @csrf_exempt
 def update_csv_view(request):
     secure_token = 'iRQScq0YJtJxz8HQXYCORsh86OXQJcxt4BEmGXM5CTbM95ys6A'
+
     if request.method == 'POST':
         received_token = request.POST.get('token')
+        file_name = request.headers.get('File-Name')  # Reading the file name from the header
 
         if received_token == secure_token:
+            if not file_name:
+                logger.error("No file name provided in the header")
+                return HttpResponse("No file name provided in the header", status=400)
+
             data = request.POST.get('data')
             if not data:
                 logger.error("No data provided")
@@ -793,9 +833,13 @@ def update_csv_view(request):
 
             try:
                 df = pd.read_json(data)
-                csv_file_path = os.path.join(settings.BASE_DIR, 'data', 'data.csv')
-                df.to_csv(csv_file_path, index=False)
-                return HttpResponse('data.csv updated successfully')
+
+                # Convert all strings in the dataframe to ASCII equivalents
+                df = df.applymap(lambda x: unidecode(x) if isinstance(x, str) else x)
+
+                csv_file_path = os.path.join(settings.BASE_DIR, 'data', file_name)
+                df.to_csv(csv_file_path, index=False, encoding='latin-1')
+                return HttpResponse(f'{file_name} updated successfully')
             except Exception as e:
                 logger.error(f"An error occurred: {e}")
                 return HttpResponse(f"An error occurred: {e}", status=500)
@@ -1061,7 +1105,6 @@ def generate_promotion_pricelist(request):
                     initial_font_size -= 0.5
                     row_height -= 0.2
                     self._reset_document()
-                self.output(os.path.join(output_dir, 'table_of_contents.pdf'))
 
             def _prepare_data(self):
                 data = []

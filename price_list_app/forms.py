@@ -70,7 +70,10 @@ class SelectionForm(forms.Form):
     width_max = forms.FloatField(required=False, label='Maximum Width (mm)')
     available = forms.IntegerField(required=False, label='Available')
     power_available = forms.IntegerField(required=False, label='Power Available (W)')
-    NoBackground = forms.BooleanField(required=False, label='No Background')
+    pal_available = forms.IntegerField(required=False, label='Pallets Available')
+    ctn_available = forms.IntegerField(required=False, label='Container Available')
+    NoBackground = forms.BooleanField(required=False, label='NoBackground')
+    NoTOC = forms.BooleanField(required=False, label='NoTOC')
     length_height_limit = forms.BooleanField(required=False, label='Length * Height <= 2000')
     no_delivery_date = forms.BooleanField(required=False, label='No Delivery Date')
 
