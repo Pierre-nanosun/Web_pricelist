@@ -2,14 +2,38 @@ from django.contrib import admin
 from .models import NomenclatureMapping, PanelMapping, Configuration, Brand, Logo, PriceLabel, Promotion, PanelColour, PanelDesign, BackgroundImage
 from django import forms
 from jsoneditor.forms import JSONEditor
-from .models import BackgroundImage
+from .views import upload_csv_view
+from django.urls import path
+from django.template.response import TemplateResponse
 
 admin.site.register(NomenclatureMapping)
 admin.site.register(PanelMapping)
 admin.site.register(Brand)
-admin.site.register(Promotion)
 admin.site.register(PanelColour)
 admin.site.register(PanelDesign)
+
+class PromotionAdmin(admin.ModelAdmin):
+    change_list_template = "price_list_app/admin/promotion_changelist.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('upload-csv/', self.admin_site.admin_view(self.upload_csv), name='upload_csv'),
+        ]
+        return custom_urls + urls
+
+    def upload_csv(self, request):
+        if request.method == "POST":
+            return upload_csv_view(request)
+        form = None  # Add your form logic here if needed
+        context = {
+            'form': form,
+            'opts': self.model._meta,
+            'title': "Import Promotions from CSV"
+        }
+        return TemplateResponse(request, "price_list_app/admin/upload_csv.html", context)
+
+admin.site.register(Promotion, PromotionAdmin)
 
 class ConfigurationAdminForm(forms.ModelForm):
     class Meta:

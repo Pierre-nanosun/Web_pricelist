@@ -10,7 +10,10 @@
     {% if user.is_authenticated %}
         <p>Hello, {{ user.username }}! (<a href="{% url 'logout' %}">Logout</a>)</p>
         <a class="btn btn-primary btn-lg" href="{% url 'select_products' %}" role="button">Get Custom Pricelist</a>
-        <a class="btn btn-primary btn-lg" href="{% url 'generate_promotion_pricelist' %}" role="button">Get Promotion Pricelist</a>
+        <!-- <a class="btn btn-primary btn-lg" href="{% url 'generate_promotion_pricelist' %}" role="button">Get Promotion Pricelist</a> -->
+
+        <a class="btn btn-primary btn-lg" href="{% url 'view_reservation_table' %}" role="button">View stocks</a>
+
     {% else %}
         <a class="btn btn-primary btn-lg" href="{% url 'social:begin' 'google-oauth2' %}" role="button">Login with Google</a>
     {% endif %}

@@ -6,12 +6,12 @@
 <div class="container-fluid">
     <div class="row justify-content-center">
         <div class="col-md-8">
-            <div class="card">
+            <div class="card form-container">
                 <div class="card-header bg-primary text-white">Select Product Types, Warehouse, and Brands</div>
                 <div class="card-body">
                     <form method="post">
                         {% csrf_token %}
-                        <div class="form-group mb-3">
+                        <div class="form-group mb-3 overflow-auto">
                             <label for="id_configurations">Saved Configurations:</label>
                             {{ form.configurations }}
                             <button type="submit" name="delete_config" class="btn btn-danger">Delete</button>
@@ -274,16 +274,17 @@
                                     </div>
                                 </div>
                             </div>
+
                             <!-- Availability Filters -->
                             <div class="card">
-                                <div class="card-header" id="headingCustomFilters">
+                                <div class="card-header" id="headingAvailabilityFilters">
                                     <h2 class="mb-0">
-                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseCustomFilters" aria-expanded="false" aria-controls="collapseCustomFilters">
+                                        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseAvailabilityFilters" aria-expanded="false" aria-controls="collapseAvailabilityFilters">
                                             Availability Filters
                                         </button>
                                     </h2>
                                 </div>
-                                <div id="collapseCustomFilters" class="collapse" aria-labelledby="headingAvailabilityFilters" data-parent="#accordionFormSections">
+                                <div id="collapseAvailabilityFilters" class="collapse" aria-labelledby="headingAvailabilityFilters" data-parent="#accordionFormSections">
                                     <div class="card-body">
                                         <div class="form-group mb-3">
                                             <label for="id_available">Available Pcs superior to:</label>
@@ -303,9 +304,9 @@
                                             {{ form.power_available }}
                                         </div>
                                     </div>
-                                    </div>
                                 </div>
                             </div>
+
                             <!-- Custom Filters -->
                             <div class="card">
                                 <div class="card-header" id="headingCustomFilters">
@@ -328,10 +329,13 @@
                                         <div class="form-check mb-3">
                                             {{ form.NoTOC }} <label for="id_NoTOC">Disable Table of content</label>
                                         </div>
+                                        <div class="form-check mb-3">
+                                            {{ form.urgent_stocks }} <label for="id_urgent_stocks">Only Urgent Stock [Last arrival > 2Months]</label>
+                                        </div>
 
                                     </div>
-                                    </div>
                                 </div>
+                            </div>
 
                             <!-- Selected Columns -->
                             <div class="card">
@@ -359,8 +363,6 @@
                                     </div>
                                 </div>
                             </div>
-                            </div>
-
                         </div>
 
                         <div class="form-group row mt-3 mb-3">

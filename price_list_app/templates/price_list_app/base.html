@@ -29,15 +29,26 @@
         input[type="checkbox"] {
             transform: scale(2);
             margin-right: 10px;
+
         }
         .large-checkbox-label {
             font-size: 1.8rem;
             padding-left: 10px;
+            padding-top: 10px;
+
         }
         .form-group label,
         .form-group input,
         .form-group select {
             font-size: 1.2em;
+        }
+        .form-group.overflow-auto {
+            overflow: auto;
+        }
+
+        .form-container {
+            min-width: 300px;  /* Adjust this value as needed */
+            min-height: 400px; /* Adjust this value as needed */
         }
         .navbar {
             background-color: #343a40;
@@ -71,6 +82,44 @@
         .logout-link:hover {
             background-color: #c82333; /* Hover color */
         }
+        /* Custom padding and margin for buttons */
+        .btn.btn-primary.btn-lg {
+            padding: 1rem 2rem; /* Padding within the button */
+            margin: 10px 0; /* Margin to separate from other elements */
+        }
+        .btn.btn-success.btn-lg {
+            padding: 1rem 2rem; /* Padding within the button */
+            margin: 10px 0; /* Margin to separate from other elements */
+        }
+
+        @media (max-width: 767.98px) {
+            .large-checkbox-label {
+                font-size: 1rem; /* Adjusted for smaller screens */
+            }
+            .form-group label,
+            .form-group input,
+            .form-group select {
+                font-size: 1em;
+            }
+            .btn.btn-primary1, .btn.btn-primary2, .btn.btn-success, .btn.btn-warning, .btn.btn-danger {
+                padding: 0.5rem 1rem; /* Smaller padding for buttons */
+                margin: 5px 0; /* Adjusted margin for buttons */
+                font-size: 0.9rem; /* Adjust font size for buttons */
+            }
+            .form-container {
+                min-width: 100%; /* Full width on smaller screens */
+                padding: 10px; /* Padding for better spacing */
+            }
+            .navbar + .container-fluid {
+                margin-top: 60px; /* Adjusted for smaller screens */
+            }
+            .card-header h2 button {
+                font-size: 1rem; /* Adjusted for smaller screens */
+            }
+            .card-body .form-group label {
+                font-size: 1rem; /* Adjusted for smaller screens */
+            }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -84,8 +133,9 @@
             <div class="navbar-nav ml-auto">
                 {% if user.is_authenticated %}
                     <a class="nav-item nav-link" href="{% url 'home' %}">Home</a>
+                    <a class="nav-item nav-link" href="{% url 'view_reservation_table' %}">View RT</a>
                     <a class="nav-item nav-link" href="{% url 'select_products' %}">Custom Pricelist</a>
-                    <a class="nav-item nav-link" href="{% url 'generate_promotion_pricelist' %}">Promotion Pricelist</a>
+                    <!-- <a class="nav-item nav-link" href="{% url 'generate_promotion_pricelist' %}">Promotion Pricelist</a>-->
                     <a class="nav-item nav-link logout-link" href="{% url 'logout' %}">Logout</a>
                 {% else %}
                     <a class="nav-item nav-link" href="{% url 'social:begin' 'google-oauth2' %}">Login with Google</a>
@@ -99,7 +149,7 @@
     </div>
 
     <footer class="footer">
-        <p>&copy; {{ year }} Price List Generator. All rights reserved.</p>
+        <p>&copy; {{ year }} Price List nanosun. All rights reserved.</p>
     </footer>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>

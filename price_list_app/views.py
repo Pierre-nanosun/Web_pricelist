@@ -13,10 +13,16 @@ from .models import Configuration, NomenclatureMapping, PanelMapping, Logo, Pric
 from PyPDF2 import PdfReader, PdfWriter
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.contrib import messages
 import logging
 from unidecode import unidecode
+from django.template.loader import render_to_string
+import csv
+
+def robots_txt(request):
+    content = render_to_string('price_list_app/robots.txt')
+    return HttpResponse(content, content_type='text/plain')
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,37 @@ numeric_columns = [
     'available', 'available_cz', 'bp_eur', 'bp_eur_cz',
     'panel_power', 'length', 'width', 'height', 'pcs_pal', 'pcs_ctn'
 ]
+
+
+def import_promotions_from_csv(file_data):
+    reader = csv.DictReader(file_data)
+    for row in reader:
+        product_name = row.get('product_name')
+        selling_price = row.get('selling_price')
+        if product_name and selling_price:
+            Promotion.objects.update_or_create(
+                product_name=product_name,
+                defaults={'selling_price': selling_price}
+            )
+
+def upload_csv_view(request):
+    if request.method == 'POST':
+        csv_file = request.FILES['csv_file']
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, 'File is not CSV type')
+            return redirect('admin:app_list', app_label='price_list_app')
+
+        try:
+            # Open the file in text mode by passing it directly to csv.reader or csv.DictReader
+            csv_file_data = csv_file.read().decode('utf-8').splitlines()
+            import_promotions_from_csv(csv_file_data)
+            messages.success(request, 'Promotions imported successfully.')
+        except Exception as e:
+            messages.error(request, f"An error occurred: {e}")
+
+        return redirect('admin:app_list', app_label='price_list_app')
+
+    return redirect('admin:app_list', app_label='price_list_app')
 
 def get_pricelabel_headers():
     headers = {}
@@ -99,7 +136,7 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect('home')
+    return redirect('logout')
 
 @login_required
 def select_products(request):
@@ -149,6 +186,7 @@ def select_products(request):
                     'pal_available' : form.cleaned_data['pal_available'],
                     'ctn_available' : form.cleaned_data['ctn_available'],
                     'length_height_limit': form.cleaned_data['length_height_limit'],
+                    'urgent_stocks' : form.cleaned_data['urgent_stocks'],
                     'no_delivery_date': form.cleaned_data['no_delivery_date'],
                     'NoBackground': form.cleaned_data['NoBackground'],
                     'NoTOC': form.cleaned_data['NoTOC'],
@@ -353,6 +391,16 @@ def generate_files(request, config_id):
         df['product_of_two_largest'] = df.apply(product_of_two_largest, axis=1)
         df = df[df['product_of_two_largest'] <= 2]
         df = df.drop(columns=['product_of_two_largest'])
+
+    if filters.get('urgent_stocks'):
+        # Convert 'min_receipt_date' to a datetime format
+        df['min_receipt_date'] = pd.to_datetime(df['min_receipt_date'], unit='ms')
+
+        # Calculate the date two months ago from today
+        two_months_ago = datetime.today() - timedelta(days=60)
+
+        # Filter the DataFrame where the difference is greater than two months
+        df = df[df['min_receipt_date'] < two_months_ago]
 
 
     _, panel_mapping = get_mappings()
@@ -856,6 +904,31 @@ def results(request):
 @login_required
 def promotion_results(request):
     return render(request, 'price_list_app/promotion_results.html')
+
+@login_required
+def view_reservation_table(request):
+    df = pd.read_csv(csv_file_path)
+
+    for col in numeric_columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    df[numeric_columns] = df[numeric_columns].fillna(0)
+
+    nomenclature_mapping, _ = get_mappings()
+
+    df['Group'] = df['nomenclature_group'].apply(lambda x: nomenclature_mapping.get(x[:3], 'Unknown'))
+
+    # Filter the DataFrame to include only the specified columns
+    df = df[['product_name', 'available', 'available_cz', 'brand', 'Group']]
+
+    # Generate HTML tables for each brand
+    brands = df['brand'].unique()
+    brand_tables = {}
+    for brand in brands:
+        brand_df = df[df['brand'] == brand]
+        brand_tables[brand] = brand_df.to_html(index=False, classes='table table-striped')
+
+    return render(request, 'price_list_app/reservation_table.html', {'brand_tables': brand_tables})
 
 @login_required
 def generate_promotion_pricelist(request):

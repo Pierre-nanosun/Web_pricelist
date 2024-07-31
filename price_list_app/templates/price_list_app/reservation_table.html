@@ -1,0 +1,119 @@
+{% extends 'price_list_app/base.html' %}
+
+{% block title %}Reservation Table{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+        <h1 class="my-4 text-center">Reservation Table</h1>
+        <div class="search-container">
+            <div class="container-fluid p-0">
+                <input type="text" id="searchInput" class="form-control" placeholder="Search for Product names, Brand, Product type..." onkeyup="filterTables()">
+            </div>
+        </div>
+        <div class="tables-container container-fluid p-0">
+            {% for brand, table in brand_tables.items %}
+                <div class="brand-section">
+                    <h2 class="brand-header text-center">{{ brand }}</h2>
+                    <div class="brand-table table-responsive">
+                        {{ table|safe }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        function filterTables() {
+            const input = document.getElementById('searchInput');
+            const filter = input.value.toLowerCase();
+            const brandSections = document.querySelectorAll('.brand-section');
+
+            brandSections.forEach(section => {
+                const header = section.querySelector('.brand-header');
+                const table = section.querySelector('table');
+                const rows = table.getElementsByTagName('tr');
+                let showTable = false;
+
+                for (let i = 1; i < rows.length; i++) {
+                    const cells = rows[i].getElementsByTagName('td');
+                    let rowContainsFilter = false;
+
+                    for (let j = 0; j < cells.length; j++) {
+                        if (cells[j].textContent.toLowerCase().indexOf(filter) > -1) {
+                            rowContainsFilter = true;
+                            break;
+                        }
+                    }
+
+                    if (rowContainsFilter) {
+                        rows[i].style.display = '';
+                        showTable = true;
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+
+                if (showTable) {
+                    table.style.display = '';
+                    header.style.display = '';
+                } else {
+                    table.style.display = 'none';
+                    header.style.display = 'none';
+                }
+            });
+        }
+    </script>
+
+    <style>
+        .search-container {
+            position: fixed;
+            top: 80px; /* Adjust based on your navbar height */
+            right: 5%;
+            width:90%;            z-index: 1000;
+            background-color: #f8f9fa;
+            padding: 5px 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box; /* Ensures padding is included in width calculation */
+        }
+        .tables-container {
+            margin-top: 80px; /* Adjust based on the search bar height */
+        }
+        .brand-section {
+            margin-top: 10px;
+        }
+        .brand-header {
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        .brand-table {
+            width: 100%;
+            overflow-x: auto; /* Enable horizontal scrolling */
+        }
+        .brand-table table {
+            width: 100%;
+            min-width: 800px; /* Adjust as needed to ensure table scrolls horizontally */
+            table-layout: fixed; /* Ensure table takes up full width */
+        }
+        .brand-table th, .brand-table td {
+            word-wrap: break-word; /* Break long words */
+            font-size: 0.9em; /* Reduce font size */
+        }
+        @media (max-width: 768px) {
+            .brand-header {
+                font-size: 1.2em;
+            }
+            .search-container {
+                top: 80px; /* Adjust for mobile navbar height */
+                right: 5%;
+                width:90%;
+                padding: 5px 10px;
+            }
+            .tables-container {
+                margin-top: 70px; /* Adjust for mobile search bar height */
+            }
+            .brand-table th, .brand-table td {
+                font-size: 0.8em; /* Further reduce font size on mobile */
+            }
+        }
+    </style>
+{% endblock %}

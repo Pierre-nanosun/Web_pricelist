@@ -21,6 +21,8 @@ urlpatterns = [
     path('promotion_results/', views.promotion_results, name='promotion_results'),
     path('download_pdf_promotion/', views.download_pdf_promotion, name='download_pdf_promotion'),
     path('download_excel_promotion/', views.download_excel_promotion, name='download_excel_promotion'),
+    path('reservation_table/', views.view_reservation_table, name='view_reservation_table'),
+    path('robots.txt', views.robots_txt, name='robots_txt'),
     ]
 
 if settings.DEBUG:

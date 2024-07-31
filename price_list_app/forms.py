@@ -75,6 +75,7 @@ class SelectionForm(forms.Form):
     NoBackground = forms.BooleanField(required=False, label='NoBackground')
     NoTOC = forms.BooleanField(required=False, label='NoTOC')
     length_height_limit = forms.BooleanField(required=False, label='Length * Height <= 2000')
+    urgent_stocks = forms.BooleanField(required=False, label='Urgent Stocks')
     no_delivery_date = forms.BooleanField(required=False, label='No Delivery Date')
 
     def clean_delivery_month_start(self):
